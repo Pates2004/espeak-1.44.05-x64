@@ -1,5 +1,7 @@
 # eSpeak 1.44.05 for Windows x64
 
+[![Windows x64 build](https://github.com/Pates2004/espeak-1.44.05-x64/actions/workflows/windows-x64.yml/badge.svg)](https://github.com/Pates2004/espeak-1.44.05-x64/actions/workflows/windows-x64.yml)
+
 This repository is a native 64-bit Windows port of the classic eSpeak 1.44.05
 text-to-speech synthesizer.
 
@@ -36,6 +38,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File platforms\windows\build-x64.
 The script builds all x64 components, performs WAV and COM/SAPI smoke tests,
 stages the complete package and creates the installer under `build\installer`.
 Use `-SkipInstaller` when only the binaries are required.
+
+The same build and tests run on GitHub Actions for every push and pull request.
+Successful runs publish the Windows installer as a downloadable workflow
+artifact.
 
 ## Windows x64 port
 

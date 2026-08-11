@@ -1,0 +1,71 @@
+name: Windows x64 build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            throw "ISCC.exe was not installed at $iscc"
+          }
+
+      - name: Build, test and package
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\build-x64.ps1
+
+      - name: Verify AMD64 binaries
+        shell: pwsh
+        run: |
+          $files = @(
+            "build\x64\Release\espeak.exe",
+            "build\x64\Release\espeak_lib.dll",
+            "build\x64\Release\espeak_sapi.dll",
+            "build\x64\Release\TTSApp.exe"
+          )
+          foreach ($file in $files) {
+            $stream = [IO.File]::OpenRead((Resolve-Path $file))
+            try {
+              $reader = [IO.BinaryReader]::new($stream)
+              $stream.Position = 0x3c
+              $peOffset = $reader.ReadInt32()
+              $stream.Position = $peOffset + 4
+              $machine = $reader.ReadUInt16()
+              if ($machine -ne 0x8664) {
+                throw "$file is not an AMD64 PE image (machine=0x$($machine.ToString('X4')))"
+              }
+            }
+            finally {
+              $stream.Dispose()
+            }
+          }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: setup_espeak-1.44.05-x64
+          path: build/installer/setup_espeak-1.44.05-x64.exe
+          if-no-files-found: error
+          compression-level: 0
+
