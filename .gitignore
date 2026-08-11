@@ -1,0 +1,30 @@
+# Generated build and package outputs
+/build/
+/trash/
+
+# Visual Studio and MSBuild intermediates
+.vs/
+*.VC.db
+*.VC.opendb
+*.user
+*.suo
+*.ncb
+*.opt
+*.plg
+*.aps
+*.obj
+*.pch
+*.idb
+*.ilk
+*.pdb
+*.tlog
+*.lastbuildstate
+*.exp
+*.lib
+*.exe
+*.dll
+
+# Generated test audio and legacy VCS metadata
+*.wav
+**/.svn/
+
