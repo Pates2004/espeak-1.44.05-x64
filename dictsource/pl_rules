@@ -574,14 +574,14 @@
 	cz)	w	(A	f
 
 	_)	w	(_c	f
-	_)	w	(_f	wE
+	_)	w	(_f	v
 	_)	w	(_h	f
 	_)	w	(_k	f
 	_)	w	(_p	f
 	_)	w	(_s	f
 	_)	w	(_t	f
-	_)	w	(_mn	wE // 'w' should be written 'we' before 'mn', but not always
-	_)	w	(_	w
+	_)	w	(_mn	vE // 'w' -> 'we' before 'mn', without using the /w/ ('ł') phoneme
+	_)	w	(_	v
 
 	f)	w	(A	f
 	h)	w	(A	f

@@ -1698,6 +1698,17 @@ static int TranslateWord2(Translator *tr, char *word, WORD_TAB *wtab, int pre_pa
 
 		flags = TranslateWord(translator, word, next_pause, wtab);
 
+		// Polish: if the one-letter word "w" is immediately followed by punctuation
+		// (w-format, w.format, w/format, w,format, ...), keep it as literal /v/
+		// and use the non-linking variant so regressive voicing does not turn it into /f/.
+		if((translator->translator_name == L('p','l')) &&
+		   (word_flags & FLAG_PUNCT_AFTER) &&
+		   (word_copy_len == 1) && (word_copy[0] == 'w'))
+		{
+			EncodePhonemes((char *)"v_", word_phonemes, bad_phoneme);
+			flags = FLAG_FOUND;
+		}
+
 		if(flags & FLAG_SPELLWORD)
 		{
 			// re-translate the word as individual letters, separated by spaces
@@ -2635,6 +2646,13 @@ if((c == '/') && (tr->langopts.testing & 2) && IsDigit09(next_in) && IsAlpha(pre
 					source_index++;
 					continue;
 				}
+			}
+
+			// Remember punctuation immediately following the previous word.
+			// Used narrowly by Polish to keep a standalone "w" literal before separators.
+			if((word_count > 0) && IsAlpha(prev_in) && iswpunct(c))
+			{
+				words[word_count-1].flags |= FLAG_PUNCT_AFTER;
 			}
 
 			if(IsAlpha(c))
