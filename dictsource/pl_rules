@@ -689,13 +689,37 @@
 .group	 z
 		z		z
 
+	// Polish z- + in... families: keep hard z + separate i
+	_)	zi	(ndeks	z_i
+	_)	zi	(ndoktryn	z_i
+	_)	zi	(ndustrializ	z_i
+	_)	zi	(ndygeniz	z_i
+	_)	zi	(ndywidualiz	z_i
+	_)	zi	(nfantyliz	z_i
+	_)	zi	(nfantyln	z_i
+	_)	zi	(nfiltrow	z_i
+	_)	zi	(nformatyz	z_i
+	_)	zi	(nkrust	z_i
+	_)	zi	(nstrumentaliz	z_i
+	_)	zi	(nstrumentow	z_i
+	_)	zi	(nstytucjonaliz	z_i
+	_)	zi	(ntegrow	z_i
+	_)	zi	(ntelektualiz	z_i
+	_)	zi	(ntensyfik	z_i
+	_)	zi	(ntensywn	z_i
+	_)	zi	(nterioryz	z_i
+	_)	zi	(nternacjonaliz	z_i
+	_)	zi	(nternaliz	z_i
+	_)	zi	(nterpret	z_i
+	_)	zi	(nwentaryz	z_i
+
 	_mue)	z	(in	z
 		z	(_	s
+	_be)	z	(imien	z
 		z	(i	Z;
 		zi	(A	Z;
 	_)	zi	(p	Z;i
 		zi	(m+	Z;i
-	_)	zi	(C	z_i
 	_nie)	zi	(C	z_i
 
 	_)	z	(_c	s

@@ -6,7 +6,19 @@
 // "letter" name, then include the letter name here, with the letter
 // prefixed by a _ character.
 
+// Polish abbreviations: spell letter by letter; do not expand semantically.
+// "ok" is intentionally NOT included.
+// Unambiguous forms; these may be typed with or without a final dot.
+
+// Ambiguous with ordinary Polish words: spell only when a final dot marks an abbreviation.
+
 // Numbers
+
+// Explicit abbreviations: spell letter-by-letter
+itd	$abbrev
+itp	$abbrev
+etc	$abbrev
+
 _0		z'ERO:
 _1		j'EdEn
 _2		dv'a
