@@ -184,7 +184,7 @@ static char *fgets_strip(char *buf, int size, FILE *f_in)
 	if(fgets(buf,size,f_in) == NULL)
 		return(NULL);
 
-	len = strlen(buf);
+	len = static_cast<int>(strlen(buf));
 	while((--len > 0) && isspace(buf[len]))
 		buf[len] = 0;
 
@@ -320,7 +320,7 @@ static espeak_VOICE *ReadVoiceFile(FILE *f_in, const char *fname, const char*lea
 			vlanguage[0] = 0;
 
 			sscanf(&linebuf[8],"%s %d",vlanguage,&priority);
-			len = strlen(vlanguage) + 2;
+			len = static_cast<unsigned int>(strlen(vlanguage)) + 2;
 			// check for space in languages[]
 			if(len < (sizeof(languages)-langix-1))
 			{
@@ -364,7 +364,7 @@ static espeak_VOICE *ReadVoiceFile(FILE *f_in, const char *fname, const char*lea
 
 	if(vname[0] != 0)
 	{
-		langix += strlen(fname)+1;
+		langix += static_cast<int>(strlen(fname))+1;
 		strcpy(&p[langix],vname);
 		voice_data->name = &p[langix];
 	}
@@ -677,7 +677,7 @@ voice_t *LoadVoice(const char *vname, int control)
 				if(strcmp(language_name,"variant") == 0)
 					break;
 	
-				len = strlen(language_name) + 2;
+				len = static_cast<unsigned int>(strlen(language_name)) + 2;
 				// check for space in languages[]
 				if(len < (sizeof(voice_languages)-langix-1))
 				{
@@ -1279,7 +1279,7 @@ static int SetVoiceScores(espeak_VOICE *voice_select, espeak_VOICE **voices, int
 	if((voice_select->languages != NULL) && (voice_select->languages[0] != 0))
 	{
 		n_parts = 1;
-		lang_len = strlen(voice_select->languages);
+		lang_len = static_cast<int>(strlen(voice_select->languages));
 		for(ix=0; (ix<=lang_len) && ((unsigned)ix < sizeof(language)); ix++)
 		{
 			if((language[ix] = tolower(voice_select->languages[ix])) == '-')
@@ -1333,7 +1333,7 @@ espeak_VOICE *SelectVoiceByName(espeak_VOICE **voices, const char *name)
 	}
 
 	sprintf(last_part,"%c%s",PATHSEP,name);
-	last_part_len = strlen(last_part);
+	last_part_len = static_cast<int>(strlen(last_part));
 
 	for(ix=0; voices[ix] != NULL; ix++)
 	{
@@ -1730,7 +1730,9 @@ espeak_ERROR SetVoiceByProperties(espeak_VOICE *voice_selector)
 //=======================================================================
 //  Library Interface Functions
 //=======================================================================
+#ifdef __GNUC__
 #pragma GCC visibility push(default)
+#endif
 
 
 ESPEAK_API const espeak_VOICE **espeak_ListVoices(espeak_VOICE *voice_spec)
@@ -1752,7 +1754,7 @@ ESPEAK_API const espeak_VOICE **espeak_ListVoices(espeak_VOICE *voice_spec)
 	n_voices_list = 0;
 
 	sprintf(path_voices,"%s%cvoices",path_home,PATHSEP);
-	len_path_voices = strlen(path_voices)+1;
+	len_path_voices = static_cast<int>(strlen(path_voices))+1;
 
 	GetVoices(path_voices);
 	voices_list[n_voices_list] = NULL;  // voices list terminator
@@ -1792,6 +1794,7 @@ ESPEAK_API espeak_VOICE *espeak_GetCurrentVoice(void)
 	return(&voice_selected);
 }
 
+#ifdef __GNUC__
 #pragma GCC visibility pop
-
+#endif
 

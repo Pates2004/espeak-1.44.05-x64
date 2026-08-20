@@ -193,7 +193,7 @@ static void InitGroups(Translator *tr)
 		}
 		else
 		{
-			len = strlen(p);
+			len = static_cast<int>(strlen(p));
 			p_name = p;
 			c = p_name[0];
 			c2 = p_name[1];
@@ -279,7 +279,7 @@ int LoadDictionary(Translator *tr, const char *name, int no_error)
 	}
 
 	tr->data_dictlist = Alloc(size);
-	size = fread(tr->data_dictlist,1,size,f);
+	size = static_cast<unsigned int>(fread(tr->data_dictlist,1,size,f));
 	fclose(f);
 
 
@@ -550,7 +550,7 @@ static void WritePhMnemonic(char *phon_out, int *ix, PHONEME_TAB *ph, PHONEME_LI
 			InterpretPhoneme(NULL, 0, plist, &phdata);
 		}
 
-		len = strlen(phdata.ipa_string);
+		len = static_cast<int>(strlen(phdata.ipa_string));
 		if(len > 0)
 		{
 			if((ipa_control = phdata.ipa_string[0]) > 0x20)
@@ -651,7 +651,7 @@ void GetTranslatedPhonemeString(char *phon_out, int n_phon_out)
 				p = phoneme_tab_list[plist->tone_ph].name;
 
 				sprintf(&phon_out[phon_out_ix], "(%s)", p);
-				phon_out_ix += (strlen(p) + 2);
+				phon_out_ix += (static_cast<int>(strlen(p)) + 2);
 			}
 			else
 			{
@@ -703,7 +703,7 @@ static int IsLetterGroup(Translator *tr, char *word, int group, int pre)
 	{
 		if(pre)
 		{
-			len = strlen(p);
+			len = static_cast<int>(strlen(p));
 			w = word - len + 1;
 		}
 		else
@@ -719,7 +719,7 @@ static int IsLetterGroup(Translator *tr, char *word, int group, int pre)
 		{
 			if(pre)
 				return(len);
-			return(w-word);   // matched a complete string
+			return(static_cast<int>(w-word));   // matched a complete string
 		}
 
 		while(*p++ != 0);  // skip to end of string
@@ -1670,7 +1670,7 @@ void AppendPhonemes(Translator *tr, char *string, int size, const char *ph)
 	int  unstress_mark;
 	int length;
 
-	length = strlen(ph) + strlen(string);
+	length = static_cast<int>(strlen(ph) + strlen(string));
 	if(length >= size)
 	{
 		return;
@@ -2003,7 +2003,7 @@ static void MatchRule(Translator *tr, char *word[], char *word_start, int group_
 					{
 						// $p_alt
 						// make a copy of the word up to the post-match characters
-						ix = *word - word_start + consumed + group_length + 1;
+						ix = static_cast<int>(*word - word_start) + consumed + group_length + 1;
 						memcpy(word_buf, word_start-1, ix);
 						word_buf[ix] = ' ';
 						word_buf[ix+1] = 0;
@@ -2679,7 +2679,7 @@ void ApplySpecialAttribute2(Translator *tr, char *phonemes, int dict_flags)
 	int len;
 	char *p;
 
-	len = strlen(phonemes);
+	len = static_cast<int>(strlen(phonemes));
 
 	if(tr->langopts.param[LOPT_ALT] & 2)
 	{
@@ -2718,7 +2718,7 @@ void ApplySpecialAttribute(Translator *tr, char *phonemes, int dict_flags)
 	if((dict_flags & (FLAG_ALT_TRANS | FLAG_ALT2_TRANS)) == 0)
 		return;
 
-	len = strlen(phonemes);
+	len = static_cast<int>(strlen(phonemes));
 	p_end = &phonemes[len-1];
 
 	switch(tr->translator_name)
@@ -2832,9 +2832,9 @@ int TransposeAlphabet(Translator *tr, char *text)
 			*p2++ = (acc << (8-bits));
 		}
 		*p2 = 0;
-		return((p2 - text) | 0x40);  // bit 6 indicates compressed characters
+		return(static_cast<int>(p2 - text) | 0x40);  // bit 6 indicates compressed characters
 	}
-	return(p2 - text);
+	return(static_cast<int>(p2 - text));
 }  // end of TransposeAlphabet
 
 
@@ -2886,7 +2886,7 @@ static const char *LookupDict2(Translator *tr, const char *word, const char *wor
 	}
 	else
 	{
-		wlen = strlen(word);
+		wlen = static_cast<int>(strlen(word));
 	}
 
 	hash = HashDictionary(word);
@@ -2930,7 +2930,7 @@ static const char *LookupDict2(Translator *tr, const char *word, const char *wor
 		else
 		{
 			strcpy(phonetic,p);
-			phoneme_len = strlen(p);
+			phoneme_len = static_cast<int>(strlen(p));
 			p += (phoneme_len + 1);
 		}
 
@@ -2960,7 +2960,7 @@ static const char *LookupDict2(Translator *tr, const char *word, const char *wor
 			{
 				// flags 81 to 90  match more than one word
 				// This comes after the other flags
-				n_chars = next - p;
+				n_chars = static_cast<int>(next - p);
 				skipwords = flag - 80;
 
 				// don't use the contraction if any of the words are emphasized
@@ -3313,7 +3313,7 @@ int LookupDictList(Translator *tr, char **wordptr, char *ph_out, unsigned int *f
 
 				if(option_phonemes == 2)
 				{
-					len = found - word1;
+					len = static_cast<int>(found - word1);
 					memcpy(word,word1,len);   // include multiple matching words
 					word[len] = 0;
 					fprintf(f_trans,"Replace: %s  %s\n",word,*wordptr);
@@ -3387,7 +3387,7 @@ int RemoveEnding(Translator *tr, char *word, int end_type, char *word_copy)
 		if(*word_end == REPLACED_E)
 			*word_end = 'e';
 	}
-	i = word_end - word;
+	i = static_cast<int>(word_end - word);
 	memcpy(word_copy,word,i);
 	word_copy[i] = 0;
 
@@ -3434,7 +3434,7 @@ int RemoveEnding(Translator *tr, char *word, int end_type, char *word_copy)
 	
 				for(i=0; (p = add_e_exceptions[i]) != NULL; i++)
 				{
-					len = strlen(p);
+					len = static_cast<int>(strlen(p));
 					if(memcmp(p,&word_end[1-len],len)==0)
 					{
 						break;
@@ -3447,7 +3447,7 @@ int RemoveEnding(Translator *tr, char *word, int end_type, char *word_copy)
 			{
 				for(i=0; (p = add_e_additions[i]) != NULL; i++)
 				{
-					len = strlen(p);
+					len = static_cast<int>(strlen(p));
 					if(memcmp(p,&word_end[1-len],len)==0)
 					{
 						end_flags |= FLAG_SUFX_E_ADDED;
@@ -3486,4 +3486,3 @@ int RemoveEnding(Translator *tr, char *word, int end_type, char *word_copy)
 
 	return(end_flags);
 }   /* end of RemoveEnding */
-

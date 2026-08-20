@@ -657,7 +657,7 @@ static int CheckDottedAbbrev(char *word1, WORD_TAB *wtab)
 
 	if(count > 1)
 	{
-		ix = wbuf - word_buf;
+		ix = static_cast<int>(wbuf - word_buf);
 		memcpy(word1, word_buf, ix);
 		while(&word1[ix] < word)
 			word1[ix++] = ' ';
@@ -724,7 +724,7 @@ int ChangeEquivalentPhonemes(Translator *tr, int lang2, char *phonemes)
 		p = eqlist;
 		while(*p != 0)
 		{
-			len = strlen(&p[1]);
+			len = static_cast<int>(strlen(&p[1]));
 			if(*p == phon)
 			{
 				strcpy(p_out, &p[1]);
@@ -1377,7 +1377,7 @@ if(dictionary_flags2[0] & FLAG_ABBREV)
 	if(end_phonemes[0] != 0)
 	{
 		// a suffix had the SUFX_T option set, add the suffix after the stress pattern has been determined
-		ix = strlen(word_phonemes);
+		ix = static_cast<int>(strlen(word_phonemes));
 		end_phonemes[N_WORD_PHONEMES-1-ix] = 0;   // ensure no buffer overflow
 		strcpy(&word_phonemes[ix], end_phonemes);
 	}
@@ -2117,7 +2117,7 @@ static int EmbeddedCommand(unsigned int &source_index)
 
 	if((p = strchr_w(commands,c)) == NULL)
 		return(0);
-	cmd = (p - commands)+1;
+	cmd = static_cast<int>(p - commands)+1;
 	if(value == -1)
 	{
 		value = embedded_default[cmd];
@@ -3035,9 +3035,9 @@ if((c == '/') && (tr->langopts.testing & 2) && IsDigit09(next_in) && IsAlpha(pre
 				}
 				else
 				{
-					nx = pw - word;
+					nx = static_cast<int>(pw - word);
 					memset(word,' ',nx);
-					nx = pn - number_buf;
+					nx = static_cast<int>(pn - number_buf);
 					memcpy(word,number_buf,nx);
 					break;
 				}
@@ -3236,4 +3236,3 @@ void InitText(int control)
 		InitNamedata();
 	}
 }
-

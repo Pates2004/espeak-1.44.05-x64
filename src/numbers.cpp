@@ -668,7 +668,7 @@ int TranslateLetter(Translator *tr, char *word, char *phonemes, int control)
 		}
 	}
 
-	len = strlen(phonemes);
+	len = static_cast<int>(strlen(phonemes));
 	if(tr->langopts.accents & 2)
 		sprintf(ph_buf2,"%c%s%s",0xff,ph_buf,capital);
 	else
@@ -1301,7 +1301,7 @@ static int LookupNum2(Translator *tr, int value, int control, char *ph_out)
 			if(tr->langopts.numbers & NUM_SINGLE_VOWEL)
 			{
 				// remove vowel from the end of tens if units starts with a vowel (LANG=Italian)
-				if(((ix = strlen(ph_tens)-1) >= 0) && (ph_digits[0] != 0))
+				if(((ix = static_cast<int>(strlen(ph_tens))-1) >= 0) && (ph_digits[0] != 0))
 				{
 					if((next_phtype = phoneme_tab[(unsigned int)(ph_digits[0])]->type) == phSTRESS)
 						next_phtype = phoneme_tab[(unsigned int)(ph_digits[1])]->type;
@@ -1318,7 +1318,7 @@ static int LookupNum2(Translator *tr, int value, int control, char *ph_out)
 	{
 		// only one primary stress
 		found = 0;
-		for(ix=strlen(ph_out)-1; ix>=0; ix--)
+		for(ix=static_cast<int>(strlen(ph_out))-1; ix>=0; ix--)
 		{
 			if(ph_out[ix] == phonSTRESS_P)
 			{
@@ -1505,7 +1505,7 @@ static int LookupNum3(Translator *tr, int value, char *ph_out, int suppress_null
 	{
 		if(ph_ordinal2[0] != 0)
 		{
-			ix = strlen(buf1);
+			ix = static_cast<int>(strlen(buf1));
 			if((ix > 0) && (buf1[ix-1] == phonPAUSE_SHORT))
 				buf1[ix-1] = 0;   // remove pause before addding ordinal suffix
 			strcpy(buf2, ph_ordinal2);
@@ -1902,4 +1902,3 @@ int TranslateNumber(Translator *tr, char *word1, char *ph_out, unsigned int *fla
 
 	return(0);
 }  // end of TranslateNumber
-

@@ -342,7 +342,7 @@ char *DecodeRule(const char *group_chars, int group_length, char *rule, int cont
 		sprintf(p,"?%d ",condition_num);
 		p = &p[strlen(p)];
 	}
-	if((ix = strlen(buf_pre)) > 0)
+	if((ix = static_cast<int>(strlen(buf_pre))) > 0)
 	{
 		while(--ix >= 0)
 			*p++ = buf_pre[ix];
@@ -351,7 +351,7 @@ char *DecodeRule(const char *group_chars, int group_length, char *rule, int cont
 	}
 	*p = 0;
 	strcat(p,buf);
-	ix = strlen(output);
+	ix = static_cast<int>(strlen(output));
 	while(ix < 8)
 		output[ix++]=' ';
 	output[ix]=0;
@@ -695,7 +695,7 @@ step=1;  // TEST
 		}
 	}
 
-	len_word = strlen(word);
+	len_word = static_cast<int>(strlen(word));
 
 	if(translator->transpose_min > 0)
 	{
@@ -703,7 +703,7 @@ step=1;  // TEST
 	}
 
 	*hash = HashDictionary(word);
-	len_phonetic = strlen(encoded_ph);
+	len_phonetic = static_cast<int>(strlen(encoded_ph));
 	
 	dict_line[1] = len_word;   // bit 6 indicates whether the word has been compressed
 	len_word &= 0x3f;
@@ -737,7 +737,7 @@ step=1;  // TEST
 		else
 		{
 			dict_line[length++] = 80 + multiple_words;
-			ix = multiple_string_end - multiple_string;
+			ix = static_cast<unsigned int>(multiple_string_end - multiple_string);
 			if(multiple_numeric_hyphen)
 			{
 				dict_line[length++] = ' ';
@@ -934,7 +934,7 @@ static void copy_rule_string(char *string, int &state)
 	if(state==4)
 	{
 		// append to any previous phoneme string, i.e. allow spaces in the phoneme string
-		len = strlen(rule_phonemes);
+		len = static_cast<int>(strlen(rule_phonemes));
 		if(len > 0)
 			rule_phonemes[len++] = ' ';
 		output = &rule_phonemes[len];
@@ -1071,7 +1071,7 @@ static void copy_rule_string(char *string, int &state)
 					mr = mnem_rules;
 					while(mr->mnem != NULL)
 					{
-						len = strlen(mr->mnem);
+						len = static_cast<int>(strlen(mr->mnem));
 						if(memcmp(p, mr->mnem, len) == 0)
 						{
 							c = mr->value;
@@ -1254,9 +1254,9 @@ static char *compile_rule(char *input)
 		}
 	}
 	strcpy(output,buf);
-	len = strlen(buf)+1;
+	len = static_cast<int>(strlen(buf))+1;
 	
-	len_name = strlen(group_name);
+	len_name = static_cast<int>(strlen(group_name));
 	if((len_name > 0) && (memcmp(rule_match,group_name,len_name) != 0))
 	{
 		utf8_in(&wc,rule_match);
@@ -1271,7 +1271,7 @@ static char *compile_rule(char *input)
 		}
 	}
 	strcpy(&output[len],rule_match);
-	len += strlen(rule_match);
+	len += static_cast<int>(strlen(rule_match));
 
 	if(debug_flag)
 	{
@@ -1310,14 +1310,14 @@ static char *compile_rule(char *input)
 	{
 		output[len++] = RULE_PRE;
 		// output PRE string in reverse order
-		for(ix = strlen(rule_pre)-1; ix>=0; ix--)
+		for(ix = static_cast<int>(strlen(rule_pre))-1; ix>=0; ix--)
 			output[len++] = rule_pre[ix];
 	}
 
 	if(rule_post[0] != 0)
 	{
 		sprintf(&output[len],"%c%s",RULE_POST,rule_post);
-		len += (strlen(rule_post)+1);
+		len += (static_cast<int>(strlen(rule_post))+1);
 	}
 	output[len++]=0;
 	prule = (char *)malloc(len);
@@ -1343,7 +1343,7 @@ static int __cdecl rgroup_sorter(RGROUP *a, RGROUP *b)
 {//===================================================
 // Sort long names before short names
 	int ix;
-	ix = strlen(b->name) - strlen(a->name);
+	ix = static_cast<int>(strlen(b->name)) - static_cast<int>(strlen(a->name));
 	if(ix != 0) return(ix);
 	ix = strcmp(a->name,b->name);
 	if(ix != 0) return(ix);
@@ -1472,7 +1472,7 @@ static void output_rule_group(FILE *f_out, int n_rules, char **rules, char *name
 	short nextchar_count[256];
 	memset(nextchar_count,0,sizeof(nextchar_count));
 
-	len_name = strlen(name);
+	len_name = static_cast<int>(strlen(name));
 
 #ifdef OUTPUT_FORMAT
 	print_rule_group(f_log,n_rules,rules,name);
@@ -1488,10 +1488,10 @@ static void output_rule_group(FILE *f_out, int n_rules, char **rules, char *name
 	for(ix=0; ix<n_rules; ix++)
 	{
 		p = rules[ix];
-		len1 = strlen(p) + 1;  // phoneme string
+		len1 = static_cast<int>(strlen(p)) + 1;  // phoneme string
 		p3 = &p[len1];
 		p2 = p3 + len_name;        // remove group name from start of match string
-		len2 = strlen(p2);
+		len2 = static_cast<int>(strlen(p2));
 
 		nextchar_count[(unsigned char)(p2[0])]++;   // the next byte after the group name
 
@@ -1580,7 +1580,7 @@ static int compile_lettergroup(char *input, FILE *f_out)
 			p++;
 		}
 		*p++ = 0;
-		length = p - p_start;
+		length = static_cast<int>(p - p_start);
 		if(length > max_length)
 			max_length = length;
 		item_length[n_items++] = length;

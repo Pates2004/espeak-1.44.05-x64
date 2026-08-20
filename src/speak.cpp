@@ -189,7 +189,7 @@ void DisplayVoices(FILE *f_out, char *language)
 		p = v->languages;
 		while(*p != 0)
 		{
-			len = strlen(p+1);
+			len = static_cast<int>(strlen(p+1));
 			lang_name = p+1;
 
 			if(v->age == 0)
@@ -319,7 +319,7 @@ static int WavegenFile(void)
 
 	if(f_wave != NULL)
 	{
-		samples_total += (out_ptr - wav_outbuf)/2;
+		samples_total += static_cast<int>((out_ptr - wav_outbuf)/2);
 		fwrite(wav_outbuf, 1, out_ptr - wav_outbuf, f_wave);
 	}
 	return(finished);
@@ -547,7 +547,7 @@ int main (int argc, char **argv)
 			{
 				if(long_options[ix].name == 0)
 					break;
-				len = strlen(long_options[ix].name);
+				len = static_cast<int>(strlen(long_options[ix].name));
 				if(memcmp(long_options[ix].name,p,len)==0)
 				{
 					c = long_options[ix].val;

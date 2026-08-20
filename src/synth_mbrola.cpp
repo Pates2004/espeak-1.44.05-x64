@@ -175,7 +175,7 @@ espeak_ERROR LoadMbrolaTable(const char *mbrola_voice, const char *phtrans, int 
 	{
 		*pw++ = Read4Bytes(f_in);
 	}
-	size = fread(mbrola_tab,1,size,f_in);
+	size = static_cast<int>(fread(mbrola_tab,1,size,f_in));
 	fclose(f_in);
 
 	setVolumeRatio_MBR((float)(mbrola_control & 0xff) /16.0f);
@@ -631,7 +631,7 @@ int MbrolaFill(int length, int resume)
 	if (!resume)
 		n_samples = samplerate * length / 1000;
 
-	req_samples = (out_end - out_ptr)/2;
+	req_samples = static_cast<int>((out_end - out_ptr)/2);
 	if (req_samples > n_samples)
 		req_samples = n_samples;
 	result = read_MBR((short *)out_ptr, req_samples);

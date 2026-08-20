@@ -505,7 +505,7 @@ void LoadConfig(void)
 			if(ix==2)
 			{
 				soundicon_tab[n_soundicon_tab].name = c1;
-				p = Alloc(strlen(string)+1);
+				p = Alloc(static_cast<int>(strlen(string))+1);
 				strcpy(p,string);
 				soundicon_tab[n_soundicon_tab].filename = p;
 				soundicon_tab[n_soundicon_tab++].length = 0;

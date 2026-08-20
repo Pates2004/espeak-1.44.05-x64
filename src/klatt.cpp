@@ -1115,7 +1115,7 @@ void SetSynth_Klatt(int length, int modn, frame_t *fr1, frame_t *fr2, voice_t *v
 	int ix;
 	DOUBLEX next;
 	int qix;
-	int cmd;
+	intptr_t cmd;
 	frame_t *fr3;
 	static frame_t prev_fr;
 

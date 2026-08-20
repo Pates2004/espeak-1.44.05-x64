@@ -26,6 +26,7 @@
 #include "wchar.h"
 #include "locale.h"
 #include <assert.h>
+#include <limits.h>
 #include <time.h>
 
 #include "speech.h"
@@ -486,7 +487,7 @@ static espeak_ERROR Synthesize(unsigned int unique_identifier, const void *text,
 		event_list_ix = 0;
 		WavegenFill(0);
 
-		length = (out_ptr - outbuf)/2;
+		length = static_cast<int>((out_ptr - outbuf)/2);
 		count_samples += length;
 		event_list[event_list_ix].type = espeakEVENT_LIST_TERMINATED; // indicates end of event list
 		event_list[event_list_ix].unique_identifier = my_unique_identifier;
@@ -573,7 +574,8 @@ void MarkerEvent(int type, unsigned int char_position, int value, unsigned char 
 	
 	time = (double(count_samples + mbrola_delay + (out_ptr - out_start)/2)*1000.0)/samplerate;
 	ep->audio_position = int(time);
-	ep->sample = (count_samples + mbrola_delay + (out_ptr - out_start)/2);
+	const int64_t sample_position = count_samples + mbrola_delay + static_cast<int>((out_ptr - out_start)/2);
+	ep->sample = (sample_position > INT_MAX) ? INT_MAX : static_cast<int>(sample_position);
 	
 #ifdef DEBUG_ENABLED
 	SHOW("MarkerEvent > count_samples=%d, out_ptr=%p, out_start=%p\n",count_samples, (void*)out_ptr, (void*)out_start);
@@ -713,7 +715,9 @@ void sync_espeak_SetPunctuationList(const wchar_t *punctlist)
 
 
 
+#ifdef __GNUC__
 #pragma GCC visibility push(default)
+#endif
 
 
 ESPEAK_API void espeak_SetSynthCallback(t_espeak_callback* SynthCallback)
@@ -1238,6 +1242,8 @@ ESPEAK_API const char *espeak_Info(void *)
 	return(version_string);
 }
 
+#ifdef __GNUC__
 #pragma GCC visibility pop
+#endif
 
   

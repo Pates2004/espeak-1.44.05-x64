@@ -774,7 +774,7 @@ static int LoadSoundFile(const char *fname, int index)
 		fclose(f);
 		return(4);
 	}
-	length = fread(p,1,length,f);
+	length = static_cast<int>(fread(p,1,length,f));
 	fclose(f);
 	remove(fname_temp);
 
@@ -923,7 +923,7 @@ static int AnnouncePunctuation(Translator *tr, int c1, int *c2_ptr, char *output
 		return(-1);
 
 	bufix1 = *bufix;
-	len = strlen(buf);
+	len = static_cast<int>(strlen(buf));
 	strcpy(&output[*bufix],buf);
 	*bufix += len;
 
@@ -1121,7 +1121,7 @@ static void ProcessParamStack(char *outbuf, int &outix)
 
 			speech_parameters[param] = new_parameters[param];
 			strcpy(&outbuf[outix],buf);
-			outix += strlen(buf);
+			outix += static_cast<int>(strlen(buf));
 		}
 	}
 }  // end of ProcessParamStack
@@ -1343,12 +1343,12 @@ int AddNameData(const char *name, int wide)
 
 	if(wide)
 	{
-		len = (wcslen((const wchar_t *)name)+1)*sizeof(wchar_t);
+		len = static_cast<int>((wcslen((const wchar_t *)name)+1)*sizeof(wchar_t));
 		n_namedata = (n_namedata + sizeof(wchar_t) - 1) % sizeof(wchar_t);  // round to wchar_t boundary
 	}
 	else
 	{
-		len = strlen(name)+1;
+		len = static_cast<int>(strlen(name))+1;
 	}
 
 	if(namedata_ix+len >= n_namedata)
@@ -1752,7 +1752,7 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 
 		sprintf(buf,"%c%dY",CTRL_EMBEDDED,value);
 		strcpy(&outbuf[outix],buf);
-		outix += strlen(buf);
+		outix += static_cast<int>(strlen(buf));
 
 		sayas_start = outix;
 		sayas_mode = value;   // punctuation doesn't end clause during SAY-AS
@@ -1806,7 +1806,7 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 			{
 				sprintf(buf,"%c%dM",CTRL_EMBEDDED,index);
 				strcpy(&outbuf[outix],buf);
-				outix += strlen(buf);
+				outix += static_cast<int>(strlen(buf));
 			}
 		}
 		break;
@@ -1834,7 +1834,7 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 				{
 					sprintf(buf,"%c%dI",CTRL_EMBEDDED,index);
 					strcpy(&outbuf[outix],buf);
-					outix += strlen(buf);
+					outix += static_cast<int>(strlen(buf));
 					sp->parameter[espeakSILENCE] = 1;
 				}
 			}
@@ -1847,7 +1847,7 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 					{
 						sprintf(buf,"%c%dU",CTRL_EMBEDDED,index);
 						strcpy(&outbuf[outix],buf);
-						outix += strlen(buf);
+						outix += static_cast<int>(strlen(buf));
 						sp->parameter[espeakSILENCE] = 1;
 					}
 				}
@@ -2057,7 +2057,7 @@ f_input = f_in;  // for GetC etc
 	if(ungot_word != NULL)
 	{
 		strcpy(buf,ungot_word);
-		ix += strlen(ungot_word);
+		ix += static_cast<int>(strlen(ungot_word));
 		ungot_word = NULL;
 	}
 
@@ -2351,7 +2351,7 @@ f_input = f_in;  // for GetC etc
 				if(LookupSpecial(tr, "_cap", text_buf2) != NULL)
 				{
 					sprintf(text_buf,"%s",text_buf2);
-					j = strlen(text_buf);
+					j = static_cast<int>(strlen(text_buf));
 					if((ix + j) < n_buf)
 					{
 						strcpy(&buf[ix],text_buf);
@@ -2502,7 +2502,7 @@ if(option_ssml) parag=1;
 				sprintf(p2,"%s",LookupCharName(tr, c1, 1));
 				if(p2[0] != 0)
 				{
-					ix += strlen(p2);
+					ix += static_cast<int>(strlen(p2));
 					announced_punctuation = c1;
 					punct_data = punct_data & ~CLAUSE_BITS_INTONATION;  // change intonation type to 0 (full-stop)
 				}
@@ -2713,4 +2713,3 @@ void InitText2(void)
 
 	xmlbase = NULL;
 }
-

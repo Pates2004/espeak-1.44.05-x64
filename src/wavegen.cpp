@@ -1663,7 +1663,7 @@ void SetSynth(int length, int modn, frame_t *fr1, frame_t *fr2, voice_t *v)
 	int length2;
 	int length4;
 	int qix;
-	int cmd;
+	intptr_t cmd;
 	static int glottal_reduce_tab1[4] = {0x30, 0x30, 0x40, 0x50};  // vowel before [?], amp * 1/256
 //	static int glottal_reduce_tab1[4] = {0x30, 0x40, 0x50, 0x60};  // vowel before [?], amp * 1/256
 	static int glottal_reduce_tab2[4] = {0x90, 0xa0, 0xb0, 0xc0};  // vowel after [?], amp * 1/256
@@ -1826,12 +1826,12 @@ int WavegenFill(int fill_zeros)
 
 		result = 0;
 		q = wcmdq[wcmdq_head];
-		length = q[1];
+		length = static_cast<int>(q[1]);
 
 		switch(q[0])
 		{
 		case WCMD_PITCH:
-			SetPitch(length,(unsigned char *)q[2],q[3] >> 16,q[3] & 0xffff);
+			SetPitch(length,(unsigned char *)q[2],static_cast<int>(q[3] >> 16),static_cast<int>(q[3] & 0xffff));
 			break;
 
 		case WCMD_PAUSE:
@@ -1849,12 +1849,12 @@ int WavegenFill(int fill_zeros)
 			echo_complete = echo_length;
 			wdata.n_mix_wavefile = 0;
 			KlattReset(1);
-			result = PlayWave(length,resume,(unsigned char*)q[2], q[3] & 0xff, q[3] >> 8);
+			result = PlayWave(length,resume,(unsigned char*)q[2], static_cast<int>(q[3] & 0xff), static_cast<int>(q[3] >> 8));
 			break;
 
 		case WCMD_WAVE2:
 			// wave file to be played at the same time as synthesis
-			wdata.mix_wave_amp = q[3] >> 8;
+			wdata.mix_wave_amp = static_cast<int>(q[3] >> 8);
 			wdata.mix_wave_scale = q[3] & 0xff;
 			wdata.n_mix_wavefile = (length & 0xffff);
 			wdata.mix_wavefile_max = (length >> 16) & 0xffff;
@@ -1872,7 +1872,7 @@ int WavegenFill(int fill_zeros)
 			wdata.n_mix_wavefile = 0;   // ... and drop through to WCMD_SPECT case
 		case WCMD_SPECT:
 			echo_complete = echo_length;
-			result = Wavegen2(length & 0xffff,q[1] >> 16,resume,(frame_t *)q[2],(frame_t *)q[3]);
+			result = Wavegen2(length & 0xffff,static_cast<int>(q[1] >> 16),resume,(frame_t *)q[2],(frame_t *)q[3]);
 			break;
 
 #ifdef INCLUDE_KLATT
@@ -1880,12 +1880,12 @@ int WavegenFill(int fill_zeros)
 			wdata.n_mix_wavefile = 0;   // ... and drop through to WCMD_SPECT case
 		case WCMD_KLATT:
 			echo_complete = echo_length;
-			result = Wavegen_Klatt2(length & 0xffff,q[1] >> 16,resume,(frame_t *)q[2],(frame_t *)q[3]);
+			result = Wavegen_Klatt2(length & 0xffff,static_cast<int>(q[1] >> 16),resume,(frame_t *)q[2],(frame_t *)q[3]);
 			break;
 #endif
 
 		case WCMD_MARKER:
-			MarkerEvent(q[1],q[2],q[3],out_ptr);
+			MarkerEvent(static_cast<int>(q[1]),static_cast<unsigned int>(q[2]),static_cast<int>(q[3]),out_ptr);
 #ifdef LOG_FRAMES
 			LogMarker(q[1],q[3]);
 #endif
@@ -1896,7 +1896,7 @@ int WavegenFill(int fill_zeros)
 			break;
 
 		case WCMD_AMPLITUDE:
-			SetAmplitude(length,(unsigned char *)q[2],q[3]);
+			SetAmplitude(length,(unsigned char *)q[2],static_cast<int>(q[3]));
 			break;
 
 		case WCMD_VOICE:
@@ -1905,7 +1905,7 @@ int WavegenFill(int fill_zeros)
 			break;
 
 		case WCMD_EMBEDDED:
-			SetEmbedded(q[1],q[2]);
+			SetEmbedded(static_cast<int>(q[1]),static_cast<int>(q[2]));
 			break;
 
 		case WCMD_MBROLA_DATA:
@@ -1913,7 +1913,7 @@ int WavegenFill(int fill_zeros)
 			break;
 
 		case WCMD_FMT_AMPLITUDE:
-			if((wdata.amplitude_fmt = q[1]) == 0)
+			if((wdata.amplitude_fmt = static_cast<int>(q[1])) == 0)
 				wdata.amplitude_fmt = 100;  // percentage, but value=0 means 100%
 			break;
 		}
@@ -1931,5 +1931,4 @@ int WavegenFill(int fill_zeros)
 
 	return(0);
 }  // end of WavegenFill
-
 

@@ -537,7 +537,7 @@ int CTTSEngObj::WritePhonemes(SPPHONEID *phons, wchar_t *pW)
 		if(p != NULL)
 		{
 			strcpy(&phbuf[ix],p);
-			ix += strlen(p);
+			ix += static_cast<int>(strlen(p));
 		}
 	}
 	strcpy(&phbuf[ix],"]]");
@@ -550,7 +550,7 @@ int CTTSEngObj::WritePhonemes(SPPHONEID *phons, wchar_t *pW)
 			pW[j] = phbuf[j];
 		}
 	}
-	return(strlen(phbuf));
+	return(static_cast<int>(strlen(phbuf)));
 }
 
 
@@ -641,32 +641,32 @@ int CTTSEngObj::ProcessFragList(const SPVTEXTFRAG* pTextFragList, wchar_t *pW_st
 			if(volume != gVolume)
 			{
 				sprintf(&cmdbuf[len],"%c%dA",CTRL_EMBEDDED,volume);
-				len += strlen(&cmdbuf[len]);
+				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
 			}
 			if(speed != gSpeed)
 			{
 				sprintf(&cmdbuf[len],"%c%dS",CTRL_EMBEDDED,speed);
-				len += strlen(&cmdbuf[len]);
+				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
 			}
 			if(pitch != gPitch)
 			{
 				sprintf(&cmdbuf[len],"%c%dP",CTRL_EMBEDDED,pitch);
-				len += strlen(&cmdbuf[len]);
+				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
 			}
 			if(range != gRange)
 			{
 				sprintf(&cmdbuf[len],"%c%dR",CTRL_EMBEDDED,range);
-				len += strlen(&cmdbuf[len]);
+				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
 			}
 			if(emphasis != gEmphasis)
 			{
 				sprintf(&cmdbuf[len],"%c%dF",CTRL_EMBEDDED,emphasis);
-				len += strlen(&cmdbuf[len]);
+				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
 			}
 			if(sayas != gSayas)
 			{
 				sprintf(&cmdbuf[len],"%c%dY",CTRL_EMBEDDED,sayas);
-				len += strlen(&cmdbuf[len]);
+				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
 			}
 
 			gVolume = volume;
@@ -690,7 +690,7 @@ int CTTSEngObj::ProcessFragList(const SPVTEXTFRAG* pTextFragList, wchar_t *pW_st
 				}
 
 				frag_offsets[frag_count].textix = text_offset;
-				frag_offsets[frag_count].bufix = pW - pW_start;
+				frag_offsets[frag_count].bufix = static_cast<unsigned int>(pW - pW_start);
 				frag_offsets[frag_count].cmdlen = len;
 
 #ifdef TEST_INPUT
@@ -745,7 +745,7 @@ if(f != NULL)
 				if((index = AddNameData((const char *)markbuf,1)) >= 0)
 				{
 					sprintf(cmdbuf,"%c%dM",CTRL_EMBEDDED,index);
-					len = strlen(cmdbuf);
+					len = static_cast<unsigned int>(strlen(cmdbuf));
 					for(ix=0; ix<len; ix++)
 					{
 						*pW++ = cmdbuf[ix];
