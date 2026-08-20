@@ -943,8 +943,9 @@ SetLengthMods(tr,3);  // all equal
 			tr->langopts.stress_flags = 0x6;  // mark unstressed final syllables as diminished
 			tr->langopts.param[LOPT_REGRESSIVE_VOICING] = 0x8;
  			tr->langopts.max_initial_consonants = 7; // for example: wchrzczony :)
- 			tr->langopts.numbers = NUM_DECIMAL_COMMA | NUM_ALLOW_SPACE | NUM_DFRACTION_2;
+			tr->langopts.numbers = NUM_DECIMAL_COMMA | NUM_ALLOW_SPACE | NUM_DFRACTION_4;
 			tr->langopts.numbers2 = 0x40;
+			tr->langopts.max_digits = 31;
 			tr->langopts.param[LOPT_COMBINE_WORDS] = 4 + 0x100;  // combine 'nie' (marked with $alt2) with some 1-syllable (and 2-syllable) words (marked with $alt)
 			SetLetterVowel(tr,'y');
 		}
@@ -1386,4 +1387,3 @@ PH('V','#'),PH('I','3'),PH('I','2'),PH('E','3')};
 }
 
 #endif
-

@@ -2291,6 +2291,20 @@ static int TranslateChar(Translator *tr, char *ptr, int prev_in, unsigned int c,
 	return(SubstituteChar(tr,c,next_in,insert));
 }
 
+static int BreakNumberAfterDigit(const Translator *tr, int remaining_digits)
+{//============================================================================
+	if(remaining_digits <= 0)
+		return(0);
+
+	if(tr->langopts.break_numbers == BREAK_THOUSANDS)
+		return((remaining_digits % 3) == 0);
+
+	if(remaining_digits >= 31)
+		return(0);  // custom grouping patterns use a 32-bit bit mask
+
+	return((static_cast<unsigned int>(tr->langopts.break_numbers) & (1u << remaining_digits)) != 0);
+}
+
 
 void *TranslateClause(Translator *tr, FILE *f_text, const void *vp_input, int *tone_out, char **voice_change)
 {//==========================================================================================================
@@ -2999,8 +3013,8 @@ if((c == '/') && (tr->langopts.testing & 2) && IsDigit09(next_in) && IsAlpha(pre
 		char *pn;
 		char *pw;
 		int nw;
-		char number_buf[150];
-		WORD_TAB num_wtab[50];  // copy of 'words', when splitting numbers into parts
+		char number_buf[N_TR_SOURCE*2];
+		WORD_TAB num_wtab[N_CLAUSE_WORDS];  // copy of 'words', when splitting numbers into parts
 
 		// start speaking at a specified word position in the text?
 		count_words++;
@@ -3054,9 +3068,9 @@ if((c == '/') && (tr->langopts.testing & 2) && IsDigit09(next_in) && IsAlpha(pre
 			pn = &number_buf[1];
 			nx = n_digits;
 			nw = 0;
-			individual_digits = 0;
+			individual_digits = ((n_digits > tr->langopts.max_digits) || (word[0] == '0'));
 
-			if((n_digits > tr->langopts.max_digits) || (word[0] == '0'))
+			if(individual_digits)
 				words[ix].flags |= FLAG_INDIVIDUAL_DIGITS;
 
 			while(pn < &number_buf[sizeof(number_buf)-20])
@@ -3065,22 +3079,24 @@ if((c == '/') && (tr->langopts.testing & 2) && IsDigit09(next_in) && IsAlpha(pre
 					break;
 
 				*pn++ = c;
-				if((--nx > 0) && (tr->langopts.break_numbers & (1 << nx)))
+				if(BreakNumberAfterDigit(tr, --nx))
 				{
 					memcpy(&num_wtab[nw++], &words[ix], sizeof(WORD_TAB));   // copy the 'words' entry for each word of numbers
 
-					if(tr->langopts.thousands_sep != ' ')
+					// Separators inserted only for parsing must not be spoken when
+					// the number is deliberately read as individual digits.
+					if(!individual_digits && (tr->langopts.thousands_sep != ' '))
 					{
 						*pn++ = tr->langopts.thousands_sep;
 					}
 					*pn++ = ' ';
-					if(tr->langopts.break_numbers & (1 << (nx-1)))
+					if(BreakNumberAfterDigit(tr, nx-1))
 					{
 						// the next group only has 1 digits (i.e. NUM2_10000), make it three
 						*pn++ = '0';
 						*pn++ = '0';
 					}
-					if(tr->langopts.break_numbers & (1 << (nx-2)))
+					if(BreakNumberAfterDigit(tr, nx-2))
 					{
 						// the next group only has 2 digits (i.e. NUM2_10000), make it three
 						*pn++ = '0';
