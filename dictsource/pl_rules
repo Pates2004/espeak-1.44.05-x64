@@ -57,7 +57,7 @@
 .group	 b
 
 		b		b
-	ja)	bł	(kA	p
+	ja)	bł	(kA	b_w
 		b	(_	p
 		b	(i	b;
 		bi	(A	b;j
@@ -367,6 +367,7 @@
 		ri	(A	Rj
 	A)	rr	(A	R
 		rz		Z
+	_ta)	rz	(an	Rz
 		rz	(_	S
 		rz	(and	Rts
 	_mu)	rz	(asichl	Rz
@@ -421,6 +422,7 @@
 	_bo)	r	(zoj	R
 
 .group	 s
+	_qua)	s	(i_	s	// exact word quasi: keep hard s
 
 
 		s		s
@@ -564,7 +566,7 @@
 	t)	v	(A	f
 
 .group	 w
-	_kr)	w		f
+	kr)	w		f
 		w		v
 		w (sk		_v
 	ier)	wsz	(A	S
@@ -580,7 +582,7 @@
 	_)	w	(_p	f
 	_)	w	(_s	f
 	_)	w	(_t	f
-	_)	w	(_mn	vE // 'w' -> 'we' before 'mn', without using the /w/ ('ł') phoneme
+
 	_)	w	(_	v
 
 	f)	w	(A	f
@@ -690,6 +692,7 @@
 		z		z
 
 	// Polish z- + in... families: keep hard z + separate i
+	_)	zi	(gnor	z_i
 	_)	zi	(ndeks	z_i
 	_)	zi	(ndoktryn	z_i
 	_)	zi	(ndustrializ	z_i
@@ -712,10 +715,13 @@
 	_)	zi	(nternaliz	z_i
 	_)	zi	(nterpret	z_i
 	_)	zi	(nwentaryz	z_i
+	_)	zi	(ryt	z_i	// zirytować, zirytowany, zirytował, zirytowanie...
+	_)	zi	(ggurat	z_i	// ziggurat, zigguratu, zigguraty...
 
 	_mue)	z	(in	z
 		z	(_	s
 	_be)	z	(imien	z
+	de)	z	(instal	z	// dezinstal... anywhere in word: hard z, following i stays from text
 		z	(i	Z;
 		zi	(A	Z;
 	_)	zi	(p	Z;i
@@ -729,44 +735,11 @@
 	_)	z	(_p	s
 	_)	z	(_s	s
 	_)	z	(_t	s
-	_)	z	(_mn	zE // 'z' should be written 'ze' before 'mn', but not always
+
 	_)	z	(_	z
 
 	_ro)	z	(iC	z
-	_)	zz	(a_	z_z
-		zz	(ini_	ts
-		zz	(inim_	ts
-		zz	(inimi_	ts
-		zz	(inich_	ts
-		zz	(iniemu_	ts
-		zz	(iniego_	ts
-		zz	(oni_	ts
-		zz	(onim_	ts
-		zz	(onimi_	ts
-		zz	(onich_	ts
-		zz	(oniemu_	ts
-		zz	(oniego_	ts
-		zz	(ani_	ts
-		zz	(anim_	ts
-		zz	(animi_	ts
-		zz	(anich_	ts
-		zz	(aniemu_	ts
-		zz	(aniego_	ts
-		z	(ini_	ts
-		z	(inim_	ts
-		z	(inimi_	ts
-		z	(inich_	ts
-		z	(iniemu_	ts
-		z	(iniego_	ts
-		zz	(a_	ts
-		zz	(ami_	ts
-		zz	(ach_	ts
-		zz	(ów_	ts
-		zz	(y_	ts
-		zz	(ę_	ts
-		zz	(o_	ts
-	_pi)	zz		ts
-	_mA)	zz	(A	ts
+
 
 .group	 ź
 		ź		Z;
@@ -801,3 +774,167 @@
 
 		$		dOlaR
 
+.group а
+		а		a
+.group б
+		б		b
+.group в
+		в		v
+.group г
+		г		g
+.group д
+		д		d
+.group е
+		е		jE
+.group ё
+		ё		jO
+.group ж
+		ж		Z
+.group з
+		з		z
+.group и
+		и		i
+.group й
+		й		j
+.group к
+		к		k
+.group л
+		л		l
+.group м
+		м		m
+.group н
+		н		n
+.group о
+		о		O
+.group п
+		п		p
+.group р
+		р		R
+.group с
+		с		s
+.group т
+		т		t
+.group у
+		у		u
+.group ф
+		ф		f
+.group х
+		х		x
+.group ц
+		ц		ts
+.group ч
+		ч		ts;
+.group ш
+		ш		S
+.group щ
+		щ		S;ts;
+.group ъ
+		ъ		_
+.group ы
+		ы		y
+.group ь
+		ь		j
+.group э
+		э		E
+.group ю
+		ю		ju
+.group я
+		я		ja
+.group є
+		є		jE
+.group і
+		і		i
+.group ї
+		ї		ji
+.group ґ
+		ґ		g
+.group ў
+		ў		w
+.group ђ
+		ђ		dz;
+.group ј
+		ј		j
+.group љ
+		љ		lj
+.group њ
+		њ		n^
+.group ћ
+		ћ		ts;
+.group џ
+		џ		dZ
+.group ѕ
+		ѕ		dz
+.group ß
+		ß		s
+.group ä
+		ä		E
+.group Ä
+		Ä		E
+.group ö
+		ö		E
+.group Ö
+		Ö		E
+.group ü
+		ü		y
+.group Ü
+		Ü		y
+.group ă
+		ă		a
+.group Ă
+		Ă		a
+.group ș
+		ș		S
+.group Ș
+		Ș		S
+.group č
+		č		tS
+.group Č
+		Č		tS
+.group š
+		š		S
+.group Š
+		Š		S
+.group ž
+		ž		Z
+.group Ž
+		Ž		Z
+.group ř
+		ř		Z
+.group Ř
+		Ř		Z
+.group ď
+		ď		dz;
+.group Ď
+		Ď		dz;
+.group ň
+		ň		n^
+.group Ň
+		Ň		n^
+.group ě
+		ě		jE
+.group Ě
+		Ě		jE
+.group ů
+		ů		u
+.group Ů
+		Ů		u
+.group ý
+		ý		y
+.group Ý
+		Ý		y
+.group ő
+		ő		E
+.group Ő
+		Ő		E
+.group ű
+		ű		y
+.group Ű
+		Ű		y
+.group ț
+		ț		ts
+.group Ț
+		Ț		ts
+.group ť
+		ť		ts;
+.group Ť
+		Ť		ts;

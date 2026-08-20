@@ -35,6 +35,10 @@ jobs:
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\build-x64.ps1
 
+      - name: Verify committed Polish dictionary
+        shell: pwsh
+        run: git diff --exit-code -- espeak-data/pl_dict
+
       - name: Verify AMD64 binaries
         shell: pwsh
         run: |
@@ -68,4 +72,3 @@ jobs:
           path: build/installer/setup_espeak-1.44.05-x64.exe
           if-no-files-found: error
           compression-level: 0
-

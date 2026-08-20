@@ -727,6 +727,8 @@ int main (int argc, char **argv)
 
 	if(flag_compile)
 	{
+		int compile_result;
+
 		LoadVoice(voicename,5);
 
 #ifdef PLATFORM_DOS
@@ -734,19 +736,19 @@ int main (int argc, char **argv)
 		strcpy(path_dsource,path_home);
 		path_dsource[strlen(path_home)-11] = 0;  // remove "espeak-data" from the end
 		strcat(path_dsource,"dictsource\\");
-		CompileDictionary(path_dsource,dictionary_name,NULL,NULL, flag_compile & 0x1);
+		compile_result = CompileDictionary(path_dsource,dictionary_name,NULL,NULL, flag_compile & 0x1);
 #else
 #ifdef PLATFORM_WINDOWS
 		char path_dsource[sizeof(path_home)+20];
 		strcpy(path_dsource,path_home);
 		path_dsource[strlen(path_home)-11] = 0;  // remove "espeak-data" from the end
 		strcat(path_dsource,"dictsource\\");
-		CompileDictionary(path_dsource,dictionary_name,NULL,NULL, flag_compile & 0x1);
+		compile_result = CompileDictionary(path_dsource,dictionary_name,NULL,NULL, flag_compile & 0x1);
 #else
-		CompileDictionary(NULL,dictionary_name,NULL,NULL, flag_compile & 0x1);
+		compile_result = CompileDictionary(NULL,dictionary_name,NULL,NULL, flag_compile & 0x1);
 #endif
 #endif
-		exit(0);
+		exit(compile_result == 0 ? 0 : 1);
 	}
 
 

@@ -1652,14 +1652,22 @@ static int compile_dictrules(FILE *f_in, FILE *f_out, char *fname_temp)
 
 			if(n_rules > 0)
 			{
-				strcpy(rgroup[n_rgroups].name,group_name);
-				rgroup[n_rgroups].group3_ix = group3_ix;
-				rgroup[n_rgroups].start = ftell(f_temp);
-				output_rule_group(f_temp,n_rules,rules,group_name);
-				rgroup[n_rgroups].length = ftell(f_temp) - rgroup[n_rgroups].start;
-				n_rgroups++;
+				if(n_rgroups >= N_RULE_GROUP2)
+				{
+					fprintf(f_log,"%5d: Too many rule groups (maximum %d)\n",linenum,N_RULE_GROUP2);
+					error_count++;
+				}
+				else
+				{
+					strcpy(rgroup[n_rgroups].name,group_name);
+					rgroup[n_rgroups].group3_ix = group3_ix;
+					rgroup[n_rgroups].start = ftell(f_temp);
+					output_rule_group(f_temp,n_rules,rules,group_name);
+					rgroup[n_rgroups].length = ftell(f_temp) - rgroup[n_rgroups].start;
+					n_rgroups++;
 
-				count += n_rules;
+					count += n_rules;
+				}
 			}
 			n_rules = 0;
 
@@ -1926,4 +1934,3 @@ int CompileDictionary(const char *dsource, const char *dict_name, FILE *log, cha
 
 	return(error_count);
 }  //  end of compile_dictionary
-

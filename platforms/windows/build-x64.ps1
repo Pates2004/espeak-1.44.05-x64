@@ -47,9 +47,15 @@ foreach ($project in $projects) {
     }
 }
 
+$espeakExe = Join-Path $releaseDir 'espeak.exe'
+& $espeakExe --path=$projectRoot --compile=pl
+if ($LASTEXITCODE -ne 0) {
+    throw 'The Polish dictionary compilation failed.'
+}
+
 if (-not $SkipTests) {
     $wavPath = Join-Path $releaseDir 'smoke-pl.wav'
-    & (Join-Path $releaseDir 'espeak.exe') --path=$projectRoot -v pl -w $wavPath '64-bit synthesis test.'
+    & $espeakExe --path=$projectRoot -v pl -w $wavPath '64-bit synthesis test.'
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $wavPath)) {
         throw 'The WAV synthesis test failed.'
     }

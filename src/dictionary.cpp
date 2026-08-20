@@ -216,6 +216,12 @@ static void InitGroups(Translator *tr)
 			}
 			else
 			{
+				if(tr->n_groups2 >= N_RULE_GROUP2)
+				{
+					fprintf(stderr,"Too many two-byte rule groups in '%s_dict' (maximum %d)\n",dictionary_name,N_RULE_GROUP2);
+					return;
+				}
+
 				if(tr->groups2_start[c] == 255)
 					tr->groups2_start[c] = tr->n_groups2;
 	
@@ -3480,5 +3486,4 @@ int RemoveEnding(Translator *tr, char *word, int end_type, char *word_copy)
 
 	return(end_flags);
 }   /* end of RemoveEnding */
-
 

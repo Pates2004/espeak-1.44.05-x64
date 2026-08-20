@@ -26,7 +26,7 @@
 #define N_WORD_PHONEMES  160          // max phonemes in a word
 #define N_WORD_BYTES     160          // max bytes for the UTF8 characters in a word
 #define N_CLAUSE_WORDS   300          // max words in a clause
-#define N_RULE_GROUP2    120          // max num of two-letter rule chains
+#define N_RULE_GROUP2    240          // max num of rule groups (must stay below 255)
 #define N_HASH_DICT     1024
 #define N_CHARSETS        20
 #define N_LETTER_GROUPS   26
