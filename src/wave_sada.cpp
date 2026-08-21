@@ -148,7 +148,7 @@ void wave_init(int srate) {
 void* wave_open(const char* the_api)
 {
   ENTER("wave_open");
-  return((void*) sun_audio_fd);
+  return((void*)(intptr_t)sun_audio_fd);
 }
 
 //>
@@ -184,7 +184,7 @@ size_t wave_write(void* theHandler,
 		  char* theMono16BitsWaveBuffer, 
 		  size_t theSize)
 {
-  size_t num;
+  ssize_t num;
   ENTER("wave_write");
   if (my_callback_is_output_enabled && (0==my_callback_is_output_enabled())) {
     SHOW_TIME("wave_write > my_callback_is_output_enabled: no!");
@@ -210,6 +210,10 @@ size_t wave_write(void* theHandler,
 #endif
 
   num = write((int)(intptr_t) theHandler, theMono16BitsWaveBuffer, theSize);
+  if (num < 0) {
+    SHOW("ERROR: wave_write failed: %s\n", strerror(errno));
+    return 0;
+  }
 
   // Keep track of the total number of samples sent -- we use this in 
   // wave_get_read_position and also use it to help calculate the
@@ -218,9 +222,9 @@ size_t wave_write(void* theHandler,
   total_samples_sent += num / 2;
 
   if (num < theSize) {
-    SHOW("ERROR: wave_write only wrote %d of %d bytes\n", num, theSize);
+    SHOW("ERROR: wave_write only wrote %zd of %zu bytes\n", num, theSize);
   } else {
-    SHOW("wave_write wrote %d bytes\n", theSize);
+    SHOW("wave_write wrote %zu bytes\n", theSize);
   }
 
   SHOW_TIME("wave_write > LEAVE");
@@ -582,7 +586,8 @@ void add_time_in_ms(struct timespec *ts, int time_in_ms)
   uint64_t t_ns = (uint64_t)ts->tv_nsec + 1000000 * (uint64_t)time_in_ms;
   while(t_ns >= ONE_BILLION)
     {
-      SHOW("event > add_time_in_ms ns: %d sec %Lu nsec \n", ts->tv_sec, t_ns);
+	  SHOW("event > add_time_in_ms ns: %lld sec %llu nsec \n",
+	       (long long)ts->tv_sec, (unsigned long long)t_ns);
       ts->tv_sec += 1;
       t_ns -= ONE_BILLION;	  
     }

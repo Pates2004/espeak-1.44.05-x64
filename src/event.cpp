@@ -396,9 +396,9 @@ ENTER("sleep_until_timeout_or_stop_request");
 
 	add_time_in_ms( &ts, time_in_ms);
 
-	SHOW("polling_thread > sleep_until_timeout_or_stop_request > start sem_timedwait from %d.%09lu to %d.%09lu \n", 
-       to.tv_sec, to.tv_nsec,
-       ts.tv_sec, ts.tv_nsec);
+	SHOW("polling_thread > sleep_until_timeout_or_stop_request > start sem_timedwait from %lld.%09ld to %lld.%09ld \n",
+       (long long)to.tv_sec, (long)to.tv_nsec,
+       (long long)ts.tv_sec, (long)ts.tv_nsec);
 
 	while ((err = sem_timedwait(&my_sem_stop_is_required, &ts)) == -1 
 		&& errno == EINTR)
@@ -407,8 +407,8 @@ ENTER("sleep_until_timeout_or_stop_request");
 	}
 
 	assert (gettimeofday(&tv, NULL) != -1);
-	SHOW("polling_thread > sleep_until_timeout_or_stop_request > stop sem_timedwait %d.%09lu \n", 
-       tv.tv_sec, tv.tv_usec*1000);
+	SHOW("polling_thread > sleep_until_timeout_or_stop_request > stop sem_timedwait %lld.%09ld \n",
+       (long long)tv.tv_sec, (long)tv.tv_usec*1000);
 
 	if (err == 0)
 	{
@@ -722,4 +722,3 @@ ENTER("event_terminate");
 
 #endif
 //>
-

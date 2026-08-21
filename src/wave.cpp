@@ -174,7 +174,7 @@ static int pa_callback(void *inputBuffer, void *outputBuffer,
 	size_t n = out_channels*sizeof(uint16_t)*framesPerBuffer;
 
 	myReadPosition += framesPerBuffer;
-	SHOW("pa_callback > myReadPosition=%u, framesPerBuffer=%lu (n=0x%x) \n",(int)myReadPosition, framesPerBuffer, n);
+	SHOW("pa_callback > myReadPosition=%u, framesPerBuffer=%lu (n=0x%zx) \n",myReadPosition, framesPerBuffer, n);
 
 	if (aWrite >= myRead)
 	{
@@ -667,13 +667,13 @@ static size_t copyBuffer(char* dest, char* src, const size_t theSizeInBytes)
 		// copy for one channel (mono)?
 		if(out_channels==1)
 		{ 
-			SHOW("copyBuffer > 1 channel > memcpy %p (%d bytes)\n", (void*)myWrite, theSizeInBytes);
+			SHOW("copyBuffer > 1 channel > memcpy %p (%zu bytes)\n", (void*)myWrite, theSizeInBytes);
 			memcpy(dest, src, theSizeInBytes);
 			bytes_written = theSizeInBytes;
 		}
 		else // copy for 2 channels (stereo)
 		{
-			SHOW("copyBuffer > 2 channels > memcpy %p (%d bytes)\n", (void*)myWrite, theSizeInBytes);
+			SHOW("copyBuffer > 2 channels > memcpy %p (%zu bytes)\n", (void*)myWrite, theSizeInBytes);
 			i = 0;
 			a_dest = (uint16_t* )dest;
 			a_src = (uint16_t* )src;
@@ -698,7 +698,10 @@ size_t wave_write(void* theHandler, char* theMono16BitsWaveBuffer, size_t theSiz
 	ENTER("wave_write");
 	size_t bytes_written = 0;
 	// space in ringbuffer for the sample needed: 1x mono channel but 2x for 1 stereo channel
-	size_t bytes_to_write = (out_channels==1) ? theSize : theSize*2;
+	const size_t channel_multiplier = (out_channels==1) ? 1u : 2u;
+	if(theSize > BUFFER_LENGTH/channel_multiplier)
+		return 0;
+	size_t bytes_to_write = theSize*channel_multiplier;
 	my_stream_could_start = 0;
  
 	if(pa_stream == NULL)
@@ -759,7 +762,7 @@ size_t wave_write(void* theHandler, char* theMono16BitsWaveBuffer, size_t theSiz
 		} // end if (aTotalFreeMem >= bytes_to_write)
 		
 		//SHOW_TIME("wave_write > wait");
-		SHOW("wave_write > wait: aTotalFreeMem=%d\n", aTotalFreeMem);
+		SHOW("wave_write > wait: aTotalFreeMem=%zu\n", aTotalFreeMem);
 		SHOW("wave_write > aRead=%p, myWrite=%p\n", (void*)aRead, (void*)myWrite);
 		usleep(10000);
 	} // end while (1)
@@ -1101,7 +1104,8 @@ void add_time_in_ms(struct timespec *ts, int time_in_ms)
   uint64_t t_ns = (uint64_t)ts->tv_nsec + 1000000 * (uint64_t)time_in_ms;
   while(t_ns >= ONE_BILLION)
     {
-      SHOW("event > add_time_in_ms ns: %d sec %Lu nsec \n", ts->tv_sec, t_ns);
+	  SHOW("event > add_time_in_ms ns: %lld sec %llu nsec \n",
+	       (long long)ts->tv_sec, (unsigned long long)t_ns);
       ts->tv_sec += 1;
       t_ns -= ONE_BILLION;	  
     }

@@ -302,9 +302,9 @@ static int sleep_until_start_request_or_inactivity()
       
       add_time_in_ms( &ts, INACTIVITY_TIMEOUT);
       
-      SHOW("fifo > sleep_until_start_request_or_inactivity > start sem_timedwait (start_is_required) from %d.%09lu to %d.%09lu \n", 
-	   to.tv_sec, to.tv_nsec,
-	   ts.tv_sec, ts.tv_nsec);
+      SHOW("fifo > sleep_until_start_request_or_inactivity > start sem_timedwait (start_is_required) from %lld.%09ld to %lld.%09ld \n",
+	   (long long)to.tv_sec, (long)to.tv_nsec,
+	   (long long)ts.tv_sec, (long)ts.tv_nsec);
       
       while ((err = sem_timedwait(&my_sem_start_is_required, &ts)) == -1 
 	     && errno == EINTR)
@@ -313,8 +313,8 @@ static int sleep_until_start_request_or_inactivity()
 	}
       
       assert (gettimeofday(&tv, NULL) != -1);
-      SHOW("fifo > sleep_until_start_request_or_inactivity > stop sem_timedwait (start_is_required, err=%d) %d.%09lu \n", err, 
-	   tv.tv_sec, tv.tv_usec*1000);
+      SHOW("fifo > sleep_until_start_request_or_inactivity > stop sem_timedwait (start_is_required, err=%d) %lld.%09ld \n", err,
+	   (long long)tv.tv_sec, (long)tv.tv_usec*1000);
       
       if (err==0)
 	{
@@ -498,7 +498,7 @@ static espeak_ERROR push(t_espeak_command* the_command)
 
   if (the_command == NULL)
     {
-      SHOW("push > command=0x%x\n", NULL);
+      SHOW("push > command=%p\n", (void*)NULL);
       return EE_INTERNAL_ERROR;
     }
 
@@ -551,7 +551,7 @@ static t_espeak_command* pop()
       head = n->next;
       free(n);
       node_counter--;
-      SHOW("pop > command=0x%x (counter=%d)\n",the_command, node_counter);
+      SHOW("pop > command=%p (counter=%d)\n",(void*)the_command, node_counter);
     }
 
   if(head == NULL)
@@ -590,4 +590,3 @@ void fifo_terminate()
 
 #endif
 //>
-

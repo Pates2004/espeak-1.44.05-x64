@@ -690,7 +690,7 @@ void display_espeak_command( t_espeak_command* the_command)
     case ET_KEY:
       {
 	const char* data = the_command->u.my_key.key_name;
-	SHOW("display_espeak_command > (%p) KEY=%c\n", (void*)the_command, data);
+	SHOW("display_espeak_command > (%p) KEY=%s\n", (void*)the_command, data);
       }
       break;
 
@@ -723,7 +723,7 @@ void display_espeak_command( t_espeak_command* the_command)
       {
 	const wchar_t* data = the_command->u.my_punctuation_list;
 	sync_espeak_SetPunctuationList( data);
-	SHOW("display_espeak_command > (%p) PUNCTLIST=%s\n", (void*)the_command, (char*)data);
+	SHOW("display_espeak_command > (%p) PUNCTLIST=%ls\n", (void*)the_command, data);
       }
       break;
 

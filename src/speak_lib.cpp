@@ -586,7 +586,7 @@ void MarkerEvent(int type, unsigned int char_position, int value, unsigned char 
 	ep->sample = (sample_position > INT_MAX) ? INT_MAX : static_cast<int>(sample_position);
 	
 #ifdef DEBUG_ENABLED
-	SHOW("MarkerEvent > count_samples=%d, out_ptr=%p, out_start=%p\n",count_samples, (void*)out_ptr, (void*)out_start);
+	SHOW("MarkerEvent > count_samples=%lld, out_ptr=%p, out_start=%p\n",static_cast<long long>(count_samples), (void*)out_ptr, (void*)out_start);
 	SHOW("*** MarkerEvent > type=%s, uid=%d, text_pos=%d, length=%d, audio_position=%d, sample=%d\n",
 			label[ep->type], ep->unique_identifier, ep->text_position, ep->length,
 			ep->audio_position, ep->sample);
@@ -836,7 +836,7 @@ ESPEAK_API espeak_ERROR espeak_Synth(const void *text, size_t size,
 		return(EE_INTERNAL_ERROR);
 #ifdef DEBUG_ENABLED
 	ENTER("espeak_Synth");
-	SHOW("espeak_Synth > position=%d, position_type=%d, end_position=%d, flags=%d, user_data=0x%x, text=%s\n", position, position_type, end_position, flags, user_data, text);
+	SHOW("espeak_Synth > position=%d, position_type=%d, end_position=%d, flags=%d, user_data=%p, text=%s\n", position, position_type, end_position, flags, (void*)user_data, text);
 #endif
 
 	if(f_logespeak)

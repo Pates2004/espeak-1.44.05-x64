@@ -251,7 +251,7 @@ static size_t pulse_free(void) {
         goto fail;
     }
 
-    SHOW("pulse_free: %s (ret=%d)\n", "pa_stream_writable_size", l);
+    SHOW("pulse_free: %s (ret=%zu)\n", "pa_stream_writable_size", l);
 
     /* If this function is called twice with no pulse_write() call in
      * between this means we should trigger the playback */
@@ -284,7 +284,7 @@ fail:
     pa_threaded_mainloop_unlock(mainloop);
 
     do_trigger = !!l;
-    SHOW("pulse_free: %p (ret)\n", (void*)l);
+    SHOW("pulse_free: %zu (ret)\n", l);
     return l;
 }
 
@@ -361,11 +361,11 @@ fail:
 // }
 
 
-static void pulse_write(void* ptr, int length) {
+static void pulse_write(void* ptr, size_t length) {
   ENTER(__FUNCTION__);
 
 
-  SHOW("pulse_write > length=%d\n", length);
+  SHOW("pulse_write > length=%zu\n", length);
 
     CHECK_CONNECTED();
 
@@ -724,7 +724,7 @@ size_t wave_write(void* theHandler, char* theMono16BitsWaveBuffer, size_t theSiz
       aTotalFreeMem = pulse_free();
       if (aTotalFreeMem >= bytes_to_write)
 	{
-	  SHOW("wave_write > aTotalFreeMem(%d) >= bytes_to_write(%d)\n", aTotalFreeMem, bytes_to_write);
+	  SHOW("wave_write > aTotalFreeMem(%zu) >= bytes_to_write(%zu)\n", aTotalFreeMem, bytes_to_write);
 	  break;
 	}
  
@@ -734,7 +734,7 @@ size_t wave_write(void* theHandler, char* theMono16BitsWaveBuffer, size_t theSiz
  	  aTotalFreeMem = MAXLENGTH*2;
  	}
        
-      SHOW("wave_write > wait: aTotalFreeMem(%d) < bytes_to_write(%d)\n", aTotalFreeMem, bytes_to_write);
+      SHOW("wave_write > wait: aTotalFreeMem(%zu) < bytes_to_write(%zu)\n", aTotalFreeMem, bytes_to_write);
 
       // 500: threshold for avoiding too many calls to pulse_write
       if (aTotalFreeMem>500)
@@ -751,7 +751,7 @@ size_t wave_write(void* theHandler, char* theMono16BitsWaveBuffer, size_t theSiz
 
  terminate:
   pthread_mutex_unlock(&pulse_mutex);
-  SHOW("wave_write: theSize=%d", theSize);
+  SHOW("wave_write: theSize=%zu", theSize);
   SHOW_TIME("wave_write > LEAVE");
   return theSize;
 }
@@ -923,7 +923,8 @@ void add_time_in_ms(struct timespec *ts, int time_in_ms)
   uint64_t t_ns = (uint64_t)ts->tv_nsec + 1000000 * (uint64_t)time_in_ms;
   while(t_ns >= ONE_BILLION)
     {
-      SHOW("event > add_time_in_ms ns: %d sec %Lu nsec \n", ts->tv_sec, t_ns);
+	  SHOW("event > add_time_in_ms ns: %lld sec %llu nsec \n",
+	       (long long)ts->tv_sec, (unsigned long long)t_ns);
       ts->tv_sec += 1;
       t_ns -= ONE_BILLION;	  
     }

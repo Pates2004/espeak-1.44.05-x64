@@ -20,6 +20,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <stdint.h>
 #ifndef NEED_GETOPT
 #include <getopt.h>
 #endif
@@ -87,10 +89,57 @@ static const char *help_text =
 
 int samplerate;
 int quiet = 0;
-unsigned int samples_total = 0;
-unsigned int samples_split = 0;
-unsigned int samples_split_seconds = 0;
+uint64_t samples_total = 0;
+uint64_t samples_split = 0;
+uint64_t samples_split_seconds = 0;
 unsigned int wavefile_count = 0;
+
+static int ParseSplitMinutes(const char *text, uint64_t *minutes)
+{
+	char *end = NULL;
+	unsigned long long value;
+	const uint64_t max_value = ~(uint64_t)0;
+
+	if((text == NULL) || (minutes == NULL) || (text[0] == 0) || (text[0] == '-'))
+		return(0);
+
+	errno = 0;
+	value = strtoull(text,&end,10);
+	if((errno == ERANGE) || (end == text) || (*end != 0) || (value > max_value))
+		return(0);
+
+	*minutes = (uint64_t)value;
+	return(1);
+}
+
+static int UpdateSplitSampleCount(int rate)
+{
+	const uint64_t max_value = ~(uint64_t)0;
+
+	if(samples_split_seconds == 0)
+	{
+		samples_split = 0;
+		return(1);
+	}
+	if((rate <= 0) || (samples_split_seconds > max_value / (uint64_t)rate))
+		return(0);
+
+	samples_split = samples_split_seconds * (uint64_t)rate;
+	return(1);
+}
+
+static int GetTextFileLength(const char *filename, size_t *length)
+{
+	struct stat statbuf;
+	const size_t max_size = ~(size_t)0;
+
+	if((filename == NULL) || (length == NULL) || (stat(filename,&statbuf) != 0) ||
+		(statbuf.st_size < 0) || ((uintmax_t)statbuf.st_size > (uintmax_t)(max_size - 1)))
+		return(0);
+
+	*length = (size_t)statbuf.st_size;
+	return(1);
+}
 
 FILE *f_wavfile = NULL;
 char filetype[5];
@@ -277,7 +326,8 @@ static int SynthCallback(short *wav, int numsamples, espeak_EVENT *events)
 		if(events->type == espeakEVENT_SAMPLERATE)
 		{
 			samplerate = events->id.number;
-			samples_split = samples_split_seconds * samplerate;
+			if(!UpdateSplitSampleCount(samplerate))
+				return(1);
 		}
 		else
 		if(events->type == espeakEVENT_SENTENCE)
@@ -374,7 +424,7 @@ int main (int argc, char **argv)
 	int value;
 	int flag_stdin = 0;
 	int flag_compile = 0;
-	int filesize = 0;
+	size_t filesize = 0;
 	int synth_flags = espeakCHARS_AUTO | espeakPHONEMES | espeakENDPAUSE;
 
 	int volume = -1;
@@ -576,7 +626,16 @@ int main (int argc, char **argv)
 			if(optarg2 == NULL)
 				samples_split_seconds = 30 * 60;  // default 30 minutes
 			else
-				samples_split_seconds = atoi(optarg2) * 60;
+			{
+				uint64_t minutes;
+				const uint64_t max_value = ~(uint64_t)0;
+				if(!ParseSplitMinutes(optarg2,&minutes) || (minutes > max_value / 60u))
+				{
+					fprintf(stderr,"Invalid --split value: %s\n",optarg2);
+					exit(2);
+				}
+				samples_split_seconds = minutes * 60u;
+			}
 			break;
 
 		case 0x107:  // --path
@@ -608,7 +667,11 @@ int main (int argc, char **argv)
 	{
 		// writing to a file (or no output), we can use synchronous mode
 		samplerate = espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS,0,data_path,0);
-		samples_split = samplerate * samples_split_seconds;
+		if(!UpdateSplitSampleCount(samplerate))
+		{
+			fprintf(stderr,"The --split interval is too large\n");
+			exit(2);
+		}
 
 		espeak_SetSynthCallback(SynthCallback);
 		if(samples_split)
@@ -688,7 +751,11 @@ int main (int argc, char **argv)
 	}
 	else
 	{
-		filesize = GetFileLength(filename);
+		if(!GetTextFileLength(filename,&filesize))
+		{
+			fprintf(stderr,"%sfile '%s'\n",err_load,filename);
+			exit(1);
+		}
 		f_text = fopen(filename,"r");
 	}
 
@@ -701,43 +768,63 @@ int main (int argc, char **argv)
 
 	if(p_text != NULL)
 	{
-		int size;
-		size = strlen(p_text);
+		size_t size = strlen(p_text);
 		espeak_Synth(p_text,size+1,0,POS_CHARACTER,0,synth_flags,NULL,NULL);
 	}
 	else
 	if(flag_stdin)
 	{
-		int max = 1000;
-		p_text = (char *)malloc(max);
+		const int line_capacity = 1000;
+		p_text = (char *)malloc(line_capacity);
+		if(p_text == NULL)
+		{
+			fprintf(stderr,"Failed to allocate input buffer\n");
+			exit(3);
+		}
 
 		if(flag_stdin == 2)
 		{
 			// line by line input on stdin
-			while(fgets(p_text,max,stdin) != NULL)
+			while(fgets(p_text,line_capacity,stdin) != NULL)
 			{
-				p_text[max-1] = 0;
-				espeak_Synth(p_text,max,0,POS_CHARACTER,0,synth_flags,NULL,NULL);
+				p_text[line_capacity-1] = 0;
+				espeak_Synth(p_text,strlen(p_text)+1,0,POS_CHARACTER,0,synth_flags,NULL,NULL);
 
 			}
 		}
 		else
 		{
+			size_t capacity = line_capacity;
+			size_t length = 0;
+			const size_t max_size = ~(size_t)0;
+			int input_character;
+
 			// bulk input on stdin
-			ix = 0;
-			while(!feof(stdin))
+			while((input_character = fgetc(stdin)) != EOF)
 			{
-				p_text[ix++] = fgetc(stdin);
-				if(ix >= (max-1))
+				if(length >= capacity-1)
 				{
-					max += 1000;
-					p_text = (char *)realloc(p_text,max);
+					char *resized;
+					if(capacity > max_size - 1000u)
+					{
+						fprintf(stderr,"Input is too large\n");
+						exit(3);
+					}
+					capacity += 1000u;
+					resized = (char *)realloc(p_text,capacity);
+					if(resized == NULL)
+					{
+						fprintf(stderr,"Failed to expand input buffer\n");
+						exit(3);
+					}
+					p_text = resized;
 				}
+				p_text[length++] = (char)input_character;
 			}
-			if(ix > 0)
+			if(length > 0)
 			{
-				p_text[ix-1] = 0;
-				espeak_Synth(p_text,ix+1,0,POS_CHARACTER,0,synth_flags,NULL,NULL);
+				p_text[length] = 0;
+				espeak_Synth(p_text,length+1,0,POS_CHARACTER,0,synth_flags,NULL,NULL);
 			}
 		}
 	}
@@ -746,13 +833,18 @@ int main (int argc, char **argv)
 	{
 		if((p_text = (char *)malloc(filesize+1)) == NULL)
 		{
-			fprintf(stderr,"Failed to allocate memory %d bytes",filesize);
+			fprintf(stderr,"Failed to allocate memory %zu bytes",filesize);
 			exit(3);
 		}
 
-		fread(p_text,1,filesize,f_text);
-		p_text[filesize]=0;
-		espeak_Synth(p_text,filesize+1,0,POS_CHARACTER,0,synth_flags,NULL,NULL);
+		const size_t bytes_read = fread(p_text,1,filesize,f_text);
+		if((bytes_read != filesize) && ferror(f_text))
+		{
+			fprintf(stderr,"%sfile '%s'\n",err_load,filename);
+			exit(1);
+		}
+		p_text[bytes_read]=0;
+		espeak_Synth(p_text,bytes_read+1,0,POS_CHARACTER,0,synth_flags,NULL,NULL);
 		fclose(f_text);
 	}
 

@@ -81,7 +81,12 @@ HRESULT SetRegistryString(HKEY root, const wchar_t* subkey,
     if (create_status != ERROR_SUCCESS)
         return HRESULT_FROM_WIN32(create_status);
 
-    const DWORD byte_count = static_cast<DWORD>((wcslen(value) + 1) * sizeof(wchar_t));
+    const size_t byte_count_wide = (wcslen(value) + 1) * sizeof(wchar_t);
+    if (byte_count_wide > MAXDWORD) {
+        RegCloseKey(key);
+        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+    }
+    const DWORD byte_count = static_cast<DWORD>(byte_count_wide);
     const LSTATUS set_status = RegSetValueExW(
         key, value_name, 0, REG_SZ,
         reinterpret_cast<const BYTE*>(value), byte_count);

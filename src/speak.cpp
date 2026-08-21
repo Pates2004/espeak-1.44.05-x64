@@ -24,6 +24,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <stdint.h>
 
 #ifndef PLATFORM_DOS
 #ifdef PLATFORM_WINDOWS
@@ -60,10 +62,28 @@ int (* phoneme_callback)(const char *) = NULL;
 
 FILE *f_wave = NULL;
 int quiet = 0;
-unsigned int samples_total = 0;
-unsigned int samples_split = 0;
+uint64_t samples_total = 0;
+uint64_t samples_split = 0;
 unsigned int wavefile_count = 0;
 int end_of_sentence = 0;
+
+static int ParseSplitMinutes(const char *text, uint64_t *minutes)
+{
+	char *end = NULL;
+	unsigned long long value;
+	const uint64_t max_value = ~static_cast<uint64_t>(0);
+
+	if((text == NULL) || (minutes == NULL) || (text[0] == 0) || (text[0] == '-'))
+		return(0);
+
+	errno = 0;
+	value = strtoull(text,&end,10);
+	if((errno == ERANGE) || (end == text) || (*end != 0) || (value > max_value))
+		return(0);
+
+	*minutes = static_cast<uint64_t>(value);
+	return(1);
+}
 
 static const char *help_text =
 "\nspeak [options] [\"<words>\"]\n\n"
@@ -692,8 +712,11 @@ int main (int argc, char **argv)
 		case 0x106:   // -- split
 			if(optarg2 == NULL)
 				samples_split = 30;  // default 30 minutes
-			else
-				samples_split = atoi(optarg2);
+			else if(!ParseSplitMinutes(optarg2,&samples_split))
+			{
+				fprintf(stderr,"Invalid --split value: %s\n",optarg2);
+				exit(2);
+			}
 			break;
 
 		case 0x107:  // --path
@@ -815,7 +838,17 @@ int main (int argc, char **argv)
 		else
 		{
 			// write sound output to a WAV file
-			samples_split = (samplerate * samples_split) * 60;
+			if(samples_split > 0)
+			{
+				const uint64_t max_value = ~static_cast<uint64_t>(0);
+				if((samplerate <= 0) ||
+					(samples_split > (max_value / 60u) / static_cast<uint64_t>(samplerate)))
+				{
+					fprintf(stderr,"The --split interval is too large\n");
+					exit(2);
+				}
+				samples_split *= static_cast<uint64_t>(samplerate) * 60u;
+			}
 
 			if(samples_split)
 			{
