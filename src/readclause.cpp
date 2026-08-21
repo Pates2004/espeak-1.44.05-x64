@@ -986,7 +986,6 @@ static int AnnouncePunctuation(Translator *tr, int c1, int *c2_ptr, char *output
 	int len;
 	int bufix1;
 	char buf[200];
-	char buf2[80];
 
 	c2 = *c2_ptr;
 	buf[0] = 0;
@@ -1024,14 +1023,18 @@ static int AnnouncePunctuation(Translator *tr, int c1, int *c2_ptr, char *output
 			else
 			if(punct_count < 4)
 			{
-				sprintf(buf,"\001+10S");
+				size_t used = 0;
 				while(punct_count-- > 0)
 				{
-					sprintf(buf2," %s",punctname);
-					strcat(buf, buf2);
+					const char *separator = (used == 0) ? " " : "\0012B ";
+					int written = snprintf(&buf[used],sizeof(buf)-used,"%s%s",separator,punctname);
+					if((written < 0) || (static_cast<size_t>(written) >= (sizeof(buf)-used)))
+					{
+						buf[0] = 0;
+						break;
+					}
+					used += static_cast<size_t>(written);
 				}
-				sprintf(buf2," \001-10S");
-				strcat(buf, buf2);
 			}
 			else
 			{
