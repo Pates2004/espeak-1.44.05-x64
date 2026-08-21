@@ -19,6 +19,8 @@
 
 #include "StdAfx.h"
 
+#include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <wctype.h>
@@ -304,14 +306,69 @@ void SetParameter(int parameter, int value, int relative)
 
 	int new_value = value;
 	int default_value;
+	int64_t calculated;
+
+	if((parameter < 0) || (parameter >= N_SPEECH_PARAM))
+		return;
 
 	if(relative)
 	{
 		if(parameter < 5)
 		{
 			default_value = param_defaults[parameter];
-			new_value = default_value + (default_value * value)/100;
+			calculated = static_cast<int64_t>(default_value) +
+				(static_cast<int64_t>(default_value) * value)/100;
+			if(calculated > INT_MAX) calculated = INT_MAX;
+			if(calculated < INT_MIN) calculated = INT_MIN;
+			new_value = static_cast<int>(calculated);
 		}
+	}
+
+	switch(parameter)
+	{
+	case espeakSILENCE:
+		if(new_value < 0) new_value = 0;
+		if(new_value > 1) new_value = 1;
+		break;
+
+	case espeakRATE:
+		if(new_value < espeakRATE_MINIMUM) new_value = espeakRATE_MINIMUM;
+		if(new_value > espeakRATE_MAXIMUM) new_value = espeakRATE_MAXIMUM;
+		break;
+
+	case espeakVOLUME:
+		if(new_value < 0) new_value = 0;
+		if(new_value > 300) new_value = 300;
+		break;
+
+	case espeakPITCH:
+	case espeakRANGE:
+		if(new_value < 0) new_value = 0;
+		if(new_value > 99) new_value = 99;
+		break;
+
+	case espeakPUNCTUATION:
+		if(new_value < espeakPUNCT_NONE) new_value = espeakPUNCT_NONE;
+		if(new_value > espeakPUNCT_SOME) new_value = espeakPUNCT_SOME;
+		break;
+
+	case espeakCAPITALS:
+		if(new_value < 0) new_value = 0;
+		if(new_value > 99) new_value = 99;
+		break;
+
+	case espeakWORDGAP:
+		if(new_value < 0) new_value = 0;
+		if(new_value > (SHRT_MAX/14)) new_value = SHRT_MAX/14;
+		break;
+
+	case espeakEMPHASIS:
+		if(new_value < 0) new_value = 0;
+		if(new_value > 4) new_value = 4;
+		break;
+
+	default:
+		break;
 	}
 	param_stack[0].parameter[parameter] = new_value;
 
@@ -329,13 +386,10 @@ void SetParameter(int parameter, int value, int relative)
 		break;
 
 	case espeakPITCH:
-		if(new_value > 99) new_value = 99;
-		if(new_value < 0) new_value = 0;
 		embedded_value[EMBED_P] = new_value;
 		break;
 
 	case espeakRANGE:
-		if(new_value > 99) new_value = 99;
 		embedded_value[EMBED_R] = new_value;
 		break;
 
@@ -367,6 +421,8 @@ static void DoEmbedded2(int *embix)
 	unsigned int word;
 
 	do {
+		if((embix == NULL) || (*embix < 0) || (*embix >= n_embedded_list))
+			return;
 		word = embedded_list[(*embix)++];
 
 		if((word & 0x1f) == EMBED_S)
@@ -823,4 +879,3 @@ if(p->type != phVOWEL)
 		}
 	}
 }  //  end of CalcLengths
-

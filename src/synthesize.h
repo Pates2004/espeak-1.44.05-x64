@@ -424,6 +424,7 @@ extern PHONEME_TAB *phoneme_tab[N_PHONEME_TAB];
 extern int n_phoneme_list;
 extern PHONEME_LIST phoneme_list[N_PHONEME_LIST];
 extern unsigned int embedded_list[];
+extern int n_embedded_list;
 
 extern unsigned char env_fall[128];
 extern unsigned char env_rise[128];
@@ -563,4 +564,3 @@ void InitBreath(void);
 void KlattInit();
 void KlattReset(int control);
 int Wavegen_Klatt2(int length, int modulation, int resume, frame_t *fr1, frame_t *fr2);
-

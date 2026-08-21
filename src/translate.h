@@ -585,6 +585,7 @@ extern int end_character_position;
 extern int clause_start_char;
 extern int clause_start_word;
 extern char *namedata;
+int IsNameDataIndex(unsigned int index);
 extern int pre_pause;
 
 

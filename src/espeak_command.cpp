@@ -154,6 +154,10 @@ t_espeak_command* create_espeak_mark(const void *text, size_t size, const char *
   memcpy(a_text, text, size);
 
   a_index_mark = strdup( index_mark);
+	if (!a_index_mark)
+	  {
+	    goto mark_error;
+	  }
 
   a_command->type = ET_MARK;
   a_command->state = CS_UNDEFINED;
@@ -185,7 +189,10 @@ t_espeak_command* create_espeak_mark(const void *text, size_t size, const char *
 	}
     }
 
-  SHOW("ET_MARK malloc text=%p, command=%p (uid=%d)\n", (void*)a_text, (void*)a_command, data->unique_identifier);
+	if (data)
+	  {
+	    SHOW("ET_MARK malloc text=%p, command=%p (uid=%d)\n", (void*)a_text, (void*)a_command, data->unique_identifier);
+	  }
 
   return a_command;
 }
@@ -208,6 +215,10 @@ t_espeak_command* create_espeak_key(const char *key_name, void *user_data)
   a_command->u.my_key.user_data = user_data;
   a_command->u.my_key.unique_identifier = ++my_current_text_id;
   a_command->u.my_key.key_name = strdup( key_name);
+	if (!a_command->u.my_key.key_name)
+	  {
+	    goto key_error;
+	  }
   a_error=0;
 
  key_error:
@@ -301,7 +312,7 @@ t_espeak_command* create_espeak_punctuation_list(const wchar_t *punctlist)
 {
   ENTER("create_espeak_punctuation_list");
   int a_error=1;
-  //  wchar_t *a_list = NULL;
+	wchar_t *a_list = NULL;
   t_espeak_command* a_command = (t_espeak_command*)malloc(sizeof(t_espeak_command));
 
   if (!punctlist || !a_command)
@@ -313,8 +324,17 @@ t_espeak_command* create_espeak_punctuation_list(const wchar_t *punctlist)
   a_command->state = CS_UNDEFINED;
 
   {
-    size_t len = (wcslen(punctlist) + 1)*sizeof(wchar_t);
-    wchar_t* a_list = (wchar_t*)malloc(len);
+	size_t n_characters = wcslen(punctlist);
+	if (n_characters >= (((size_t)-1)/sizeof(wchar_t)))
+	  {
+	    goto list_error;
+	  }
+	size_t len = (n_characters + 1)*sizeof(wchar_t);
+	a_list = (wchar_t*)malloc(len);
+	if (!a_list)
+	  {
+	    goto list_error;
+	  }
     memcpy(a_list, punctlist, len);
     a_command->u.my_punctuation_list = a_list;
   }
@@ -324,6 +344,10 @@ t_espeak_command* create_espeak_punctuation_list(const wchar_t *punctlist)
  list_error:
   if (a_error)
     {
+	  if (a_list)
+	{
+	  free(a_list);
+	}
       if (a_command)
 	{
 	  free (a_command);
@@ -354,6 +378,10 @@ t_espeak_command* create_espeak_voice_name(const char *name)
   a_command->type = ET_VOICE_NAME;
   a_command->state = CS_UNDEFINED;
   a_command->u.my_voice_name = strdup( name);
+	if (!a_command->u.my_voice_name)
+	  {
+	    goto name_error;
+	  }
   a_error=0;
 
  name_error:
@@ -375,6 +403,7 @@ t_espeak_command* create_espeak_voice_spec(espeak_VOICE *voice)
 {
   ENTER("create_espeak_voice_spec");
   int a_error=1;
+	espeak_VOICE* data = NULL;
   t_espeak_command* a_command = (t_espeak_command*)malloc(sizeof(t_espeak_command));
 
   if (!voice || !a_command)
@@ -385,22 +414,31 @@ t_espeak_command* create_espeak_voice_spec(espeak_VOICE *voice)
   a_command->type = ET_VOICE_SPEC;
   a_command->state = CS_UNDEFINED;
   {
-    espeak_VOICE* data = &(a_command->u.my_voice_spec);
+	data = &(a_command->u.my_voice_spec);
     memcpy(data, voice, sizeof(espeak_VOICE));
+	data->name = NULL;
+	data->languages = NULL;
+	data->identifier = NULL;
 
     if (voice->name)
       {
 	data->name = strdup(voice->name);
+	if (!data->name)
+	  goto spec_error;
       }
 
     if (voice->languages)
       {
 	data->languages = strdup(voice->languages);
+	if (!data->languages)
+	  goto spec_error;
       }
 
     if (voice->identifier)
       {
 	data->identifier = strdup(voice->identifier);
+	if (!data->identifier)
+	  goto spec_error;
       }
 
     a_error=0;
@@ -409,6 +447,12 @@ t_espeak_command* create_espeak_voice_spec(espeak_VOICE *voice)
  spec_error:
   if (a_error)
     {
+	  if (data)
+	{
+	  if (data->name) free((void *)data->name);
+	  if (data->languages) free((void *)data->languages);
+	  if (data->identifier) free((void *)data->identifier);
+	}
       if (a_command)
 	{
 	  free (a_command);

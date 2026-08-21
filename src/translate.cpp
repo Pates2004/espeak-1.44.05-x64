@@ -98,7 +98,7 @@ int option_multibyte=espeakCHARS_AUTO;   // 0=auto, 1=utf8, 2=8bit, 3=wchar, 4=1
 int option_linelength = 0;
 
 #define N_EMBEDDED_LIST  250
-static int embedded_ix;
+int n_embedded_list;
 static int embedded_read;
 unsigned int embedded_list[N_EMBEDDED_LIST];
 
@@ -1596,7 +1596,7 @@ static int TranslateWord2(Translator *tr, char *word, WORD_TAB *wtab, int pre_pa
 	source_ix = (wtab->sourceix & 0x7ff) | (len << 11); // bits 0-10 sourceix, bits 11-15 word length
 
 	word_flags = wtab[0].flags;
-	if(word_flags & FLAG_EMBEDDED)
+	if((word_flags & FLAG_EMBEDDED) && (embedded_read < n_embedded_list))
 	{
 		embedded_flag = SFLAG_EMBEDDED;
 
@@ -1623,7 +1623,7 @@ static int TranslateWord2(Translator *tr, char *word, WORD_TAB *wtab, int pre_pa
 					pre_pause += value;
 				break;
 			}
-		} while((embedded_cmd & 0x80) == 0);
+		} while(((embedded_cmd & 0x80) == 0) && (embedded_read < n_embedded_list));
 	}
 
 	if(word[0] == 0)
@@ -1648,14 +1648,14 @@ static int TranslateWord2(Translator *tr, char *word, WORD_TAB *wtab, int pre_pa
 
 	if(word_flags & FLAG_FIRST_UPPER)
 	{
-		if((option_capitals > 2) && (embedded_ix < N_EMBEDDED_LIST-6))
+		if((option_capitals > 2) && (n_embedded_list < N_EMBEDDED_LIST-6))
 		{
 			// indicate capital letter by raising pitch
-			if(embedded_flag)
-				embedded_list[embedded_ix-1] &= ~0x80;   // already embedded command before this word, remove terminator
+			if(embedded_flag && (n_embedded_list > 0))
+				embedded_list[n_embedded_list-1] &= ~0x80;   // already embedded command before this word, remove terminator
 			if((pitch_raised = option_capitals) == 3)
 				pitch_raised = 20;  // default pitch raise for capitals
-			embedded_list[embedded_ix++] = EMBED_P+0x40+0x80 + (pitch_raised << 8);  // raise pitch
+			embedded_list[n_embedded_list++] = EMBED_P+0x40+0x80 + (pitch_raised << 8);  // raise pitch
 			embedded_flag = SFLAG_EMBEDDED;
 		}
 	}
@@ -2066,7 +2066,7 @@ static int TranslateWord2(Translator *tr, char *word, WORD_TAB *wtab, int pre_pa
 
 	if(pitch_raised > 0)
 	{
-		embedded_list[embedded_ix++] = EMBED_P+0x60+0x80 + (pitch_raised << 8);  // lower pitch
+		embedded_list[n_embedded_list++] = EMBED_P+0x60+0x80 + (pitch_raised << 8);  // lower pitch
 		SetPlist2(&ph_list2[n_ph_list2],phonPAUSE_SHORT);
 		ph_list2[n_ph_list2++].synthflags = SFLAG_EMBEDDED;
 	}
@@ -2109,15 +2109,18 @@ static int EmbeddedCommand(unsigned int &source_index)
 		source_index++;
 	}
 
-	if(isdigit(source[source_index]))
+	if(isdigit(static_cast<unsigned char>(source[source_index])))
 	{
-		value = atoi(&source[source_index]);
-		while(isdigit(source[source_index]))
-			source_index++;
+		char *number_end;
+		long parsed_value = strtol(&source[source_index],&number_end,10);
+		if(parsed_value > 0x7fffff)
+			parsed_value = 0x7fffff;
+		value = static_cast<int>(parsed_value);
+		source_index = static_cast<unsigned int>(number_end - source);
 	}
 
 	c = source[source_index++];
-	if(embedded_ix >= (N_EMBEDDED_LIST - 2))
+	if(n_embedded_list >= (N_EMBEDDED_LIST - 2))
 		return(0);  // list is full
 
 	if((p = strchr_w(commands,c)) == NULL)
@@ -2142,7 +2145,7 @@ static int EmbeddedCommand(unsigned int &source_index)
 			word_emphasis = 0;
 	}
 
-	embedded_list[embedded_ix++] = cmd + sign + (value << 8);
+	embedded_list[n_embedded_list++] = cmd + sign + (value << 8);
 	return(1);
 }  //  end of EmbeddedCommand
 
@@ -2362,7 +2365,7 @@ void *TranslateClause(Translator *tr, FILE *f_text, const void *vp_input, int *t
 	p_textinput = (unsigned char *)vp_input;
 	p_wchar_input = (wchar_t *)vp_input;
 
-	embedded_ix = 0;
+	n_embedded_list = 0;
 	embedded_read = 0;
 	pre_pause = 0;
 	any_stressed_words = 0;
@@ -2932,10 +2935,10 @@ if((c == '/') && (tr->langopts.testing & 2) && IsDigit09(next_in) && IsAlpha(pre
 
 			if((ix > words[word_count].start) && (word_count < N_CLAUSE_WORDS-1))
 			{
-				if(embedded_count > 0)
+				if((embedded_count > 0) && (n_embedded_list > 0))
 				{
 					// there are embedded commands before this word
-					embedded_list[embedded_ix-1] |= 0x80;   // terminate list of commands for this word
+					embedded_list[n_embedded_list-1] |= 0x80;   // terminate list of commands for this word
 					words[word_count].flags |= FLAG_EMBEDDED;
 					embedded_count = 0;
 				}
@@ -2994,10 +2997,10 @@ if((c == '/') && (tr->langopts.testing & 2) && IsDigit09(next_in) && IsAlpha(pre
 		pre_pause_add = 0;
 	}
 
-	if((word_count==0) && (embedded_count > 0))
+	if((word_count==0) && (embedded_count > 0) && (n_embedded_list > 0))
 	{
 		// add a null 'word' to carry the embedded command flag
-		embedded_list[embedded_ix-1] |= 0x80; 
+		embedded_list[n_embedded_list-1] |= 0x80;
 		words[word_count].flags |= FLAG_EMBEDDED;
 		word_count = 1;
 	}
@@ -3199,10 +3202,10 @@ if((c == '/') && (tr->langopts.testing & 2) && IsDigit09(next_in) && IsAlpha(pre
 
 	MakePhonemeList(tr, clause_pause, new_sentence);
 
-	if(embedded_count)   // ???? is this needed
+	if(embedded_count && (n_embedded_list > 0))   // ???? is this needed
 	{
 		phoneme_list[n_phoneme_list-2].synthflags = SFLAG_EMBEDDED;
-		embedded_list[embedded_ix-1] |= 0x80;
+		embedded_list[n_embedded_list-1] |= 0x80;
 	}
 
 

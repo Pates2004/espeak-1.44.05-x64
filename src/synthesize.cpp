@@ -1240,6 +1240,8 @@ void DoEmbedded(int *embix, int sourceix)
 	int command;
 
 	do {
+		if((embix == NULL) || (*embix < 0) || (*embix >= n_embedded_list))
+			return;
 		word = embedded_list[*embix];
 		value = word >> 8;
 		command = word & 0x7f;
@@ -1257,9 +1259,9 @@ void DoEmbedded(int *embix, int sourceix)
 			break;
 
 		case EMBED_I:   // play dynamically loaded wav data (sound icon)
-			if((int)value < n_soundicon_tab)
+			if(value < static_cast<unsigned int>(n_soundicon_tab))
 			{
-				if(soundicon_tab[value].length != 0)
+				if((soundicon_tab[value].length > 0) && (soundicon_tab[value].data != NULL))
 				{
 					DoPause(10,0);   // ensure a break in the speech
 					wcmdq[wcmdq_tail][0] = WCMD_WAVE;
@@ -1272,11 +1274,13 @@ void DoEmbedded(int *embix, int sourceix)
 			break;
 
 		case EMBED_M:   // named marker
-			DoMarker(espeakEVENT_MARK, (sourceix & 0x7ff) + clause_start_char, 0, value);
+			if(IsNameDataIndex(value))
+				DoMarker(espeakEVENT_MARK, (sourceix & 0x7ff) + clause_start_char, 0, value);
 			break;
 
 		case EMBED_U:   // play sound
-			DoMarker(espeakEVENT_PLAY, count_characters+1, 0, value);  // always occurs at end of clause
+			if(IsNameDataIndex(value))
+				DoMarker(espeakEVENT_PLAY, count_characters+1, 0, value);  // always occurs at end of clause
 			break;
 
 		default:

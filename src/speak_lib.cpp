@@ -338,24 +338,29 @@ static void init_path(const char *path)
 
 	if(path != NULL)
 	{
-		sprintf(path_home,"%s/espeak-data",path);
+		snprintf(path_home,sizeof(path_home),"%s/espeak-data",path);
 		return;
 	}
 
 	if((env = getenv("ESPEAK_DATA_PATH")) != NULL)
 	{
-		sprintf(path_home,"%s/espeak-data",env);
+		snprintf(path_home,sizeof(path_home),"%s/espeak-data",env);
 		if(GetFileLength(path_home) == -2)
 			return;   // an espeak-data directory exists 
 	}
 
 	buf[0] = 0;
-	RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Speech\\Voices\\Tokens\\eSpeak", 0, KEY_READ, &RegKey);
-	size = sizeof(buf);
-	var_type = REG_SZ;
-	RegQueryValueExA(RegKey, "path", 0, &var_type, buf, &size);
+	if(RegOpenKeyExA(HKEY_LOCAL_MACHINE, "Software\\Microsoft\\Speech\\Voices\\Tokens\\eSpeak", 0, KEY_READ, &RegKey) == ERROR_SUCCESS)
+	{
+		size = sizeof(buf)-1;
+		var_type = REG_SZ;
+		if(RegQueryValueExA(RegKey, "path", 0, &var_type, buf, &size) != ERROR_SUCCESS)
+			buf[0] = 0;
+		buf[sizeof(buf)-1] = 0;
+		RegCloseKey(RegKey);
+	}
 
-	sprintf(path_home,"%s\\espeak-data",buf);
+	snprintf(path_home,sizeof(path_home),"%s\\espeak-data",buf);
 
 #else
 	char *env;
@@ -374,8 +379,11 @@ static void init_path(const char *path)
 			return;   // an espeak-data directory exists 
 	}
 
-	snprintf(path_home,sizeof(path_home),"%s/espeak-data",getenv("HOME"));
-	if(access(path_home,R_OK) != 0)
+	if((env = getenv("HOME")) != NULL)
+		snprintf(path_home,sizeof(path_home),"%s/espeak-data",env);
+	else
+		path_home[0] = 0;
+	if((path_home[0] == 0) || (access(path_home,R_OK) != 0))
 	{
 		strcpy(path_home,PATH_ESPEAK_DATA);
 	}
@@ -394,10 +402,10 @@ static int initialise(void)
 		if(result == -1)
 		{
 			fprintf(stderr,"Failed to load espeak-data\n");
-			exit(1);
 		}
 		else
 			fprintf(stderr,"Wrong version of espeak-data 0x%x (expects 0x%x) at %s\n",result,version_phdata,path_home);
+		return(EE_INTERNAL_ERROR);
 	}
 
 	memset(&voice_selected,0,sizeof(voice_selected));
@@ -585,7 +593,7 @@ void MarkerEvent(int type, unsigned int char_position, int value, unsigned char 
 #endif
 
 	if((type == espeakEVENT_MARK) || (type == espeakEVENT_PLAY))
-		ep->id.name = &namedata[value];
+		ep->id.name = IsNameDataIndex(static_cast<unsigned int>(value)) ? &namedata[value] : NULL;
 	else
 		ep->id.number = value;
 }  //  end of MarkerEvent
@@ -745,6 +753,9 @@ ESPEAK_API int espeak_Initialize(espeak_AUDIO_OUTPUT output_type, int buf_length
 {//=============================================================================================================
 ENTER("espeak_Initialize");
 	int param;
+	void *resized;
+	if((output_type < AUDIO_OUTPUT_PLAYBACK) || (output_type > AUDIO_OUTPUT_SYNCH_PLAYBACK))
+		return(EE_INTERNAL_ERROR);
 
 	// It seems that the wctype functions don't work until the locale has been set
 	// to something other than the default "C".  Then, not only Latin1 but also the
@@ -760,7 +771,8 @@ ENTER("espeak_Initialize");
 #endif
 	
 	init_path(path);
-	initialise();
+	if(initialise() != 0)
+		return(EE_INTERNAL_ERROR);
 	select_output(output_type);
 
 	if(f_logespeak)
@@ -769,18 +781,24 @@ ENTER("espeak_Initialize");
 	}
 
 	// buflength is in mS, allocate 2 bytes per sample
-	if(buf_length == 0)
+	if(buf_length <= 0)
 		buf_length = 200;
+	if(buf_length > 60000)
+		buf_length = 60000;
 	outbuf_size = (buf_length * samplerate)/500;
-	outbuf = (unsigned char*)realloc(outbuf,outbuf_size);
-	if((out_start = outbuf) == NULL)
+	resized = realloc(outbuf,outbuf_size);
+	if(resized == NULL)
 		return(EE_INTERNAL_ERROR);
+	outbuf = static_cast<unsigned char *>(resized);
+	out_start = outbuf;
 	
 	// allocate space for event list.  Allow 200 events per second.
 	// Add a constant to allow for very small buf_length
 	n_event_list = (buf_length*200)/1000 + 20;
-	if((event_list = (espeak_EVENT *)realloc(event_list,sizeof(espeak_EVENT) * n_event_list)) == NULL)
+	resized = realloc(event_list,sizeof(espeak_EVENT) * n_event_list);
+	if(resized == NULL)
 		return(EE_INTERNAL_ERROR);
+	event_list = static_cast<espeak_EVENT *>(resized);
 	
 	option_phonemes = 0;
 	option_mbrola_phonemes = 0;
@@ -814,6 +832,8 @@ ESPEAK_API espeak_ERROR espeak_Synth(const void *text, size_t size,
 				     unsigned int end_position, unsigned int flags, 
 				     unsigned int* unique_identifier, void* user_data)
 {//=====================================================================================
+	if(text == NULL)
+		return(EE_INTERNAL_ERROR);
 #ifdef DEBUG_ENABLED
 	ENTER("espeak_Synth");
 	SHOW("espeak_Synth > position=%d, position_type=%d, end_position=%d, flags=%d, user_data=0x%x, text=%s\n", position, position_type, end_position, flags, user_data, text);
@@ -842,6 +862,8 @@ ESPEAK_API espeak_ERROR espeak_Synth(const void *text, size_t size,
 #ifdef USE_ASYNC
 	// Create the text command
 	t_espeak_command* c1 = create_espeak_text(text, size, position, position_type, end_position, flags, user_data);
+	if(c1 == NULL)
+		return(a_error);
 
 	// Retrieve the unique identifier
 	*unique_identifier = c1->u.my_text.unique_identifier;
@@ -879,6 +901,8 @@ ESPEAK_API espeak_ERROR espeak_Synth_Mark(const void *text, size_t size,
 					  unsigned int* unique_identifier,
 					  void* user_data)
 {//=========================================================================
+	if((text == NULL) || (index_mark == NULL))
+		return(EE_INTERNAL_ERROR);
 #ifdef DEBUG_ENABLED
   ENTER("espeak_Synth_Mark");
   SHOW("espeak_Synth_Mark > index_mark=%s, end_position=%d, flags=%d, text=%s\n", index_mark, end_position, flags, text);
@@ -908,6 +932,8 @@ ESPEAK_API espeak_ERROR espeak_Synth_Mark(const void *text, size_t size,
 	// Create the mark command
 	t_espeak_command* c1 = create_espeak_mark(text, size, index_mark, end_position, 
 						flags, user_data);
+	if(c1 == NULL)
+		return(EE_INTERNAL_ERROR);
 	
 	// Retrieve the unique identifier
 	*unique_identifier = c1->u.my_mark.unique_identifier;
@@ -942,6 +968,8 @@ ESPEAK_API espeak_ERROR espeak_Key(const char *key)
 {//================================================
 	ENTER("espeak_Key");
 	// symbolic name, symbolicname_character  - is there a system resource of symbolicnames per language
+	if(key == NULL)
+		return(EE_INTERNAL_ERROR);
 
 	if(f_logespeak)
 	{
@@ -958,6 +986,8 @@ ESPEAK_API espeak_ERROR espeak_Key(const char *key)
 
 #ifdef USE_ASYNC
 	t_espeak_command* c = create_espeak_key( key, NULL);
+	if(c == NULL)
+		return(EE_INTERNAL_ERROR);
 	a_error = fifo_add_command(c);
 	if (a_error != EE_OK)
 	{
@@ -989,6 +1019,8 @@ ESPEAK_API espeak_ERROR espeak_Char(wchar_t character)
 	}
 
 	t_espeak_command* c = create_espeak_char( character, NULL);
+	if(c == NULL)
+		return(EE_INTERNAL_ERROR);
 	a_error = fifo_add_command(c);
 	if (a_error != EE_OK)
 	{
@@ -1005,6 +1037,8 @@ ESPEAK_API espeak_ERROR espeak_Char(wchar_t character)
 ESPEAK_API espeak_ERROR espeak_SetVoiceByName(const char *name)
 {//============================================================
   ENTER("espeak_SetVoiceByName");
+	if(name == NULL)
+		return(EE_INTERNAL_ERROR);
 
 //#ifdef USE_ASYNC
 // I don't think there's a need to queue change voice requests
@@ -1033,6 +1067,8 @@ ESPEAK_API espeak_ERROR espeak_SetVoiceByName(const char *name)
 ESPEAK_API espeak_ERROR espeak_SetVoiceByProperties(espeak_VOICE *voice_selector)
 {//==============================================================================
   ENTER("espeak_SetVoiceByProperties");
+	if(voice_selector == NULL)
+		return(EE_INTERNAL_ERROR);
 
 //#ifdef USE_ASYNC
 #ifdef deleted
@@ -1060,6 +1096,9 @@ ESPEAK_API int espeak_GetParameter(espeak_PARAMETER parameter, int current)
 {//========================================================================
 	ENTER("espeak_GetParameter");
 	// current: 0=default value, 1=current value
+	if((parameter < 0) || (parameter >= N_SPEECH_PARAM))
+		return(0);
+
 	if(current)
 	{
 		return(param_stack[0].parameter[parameter]);
@@ -1074,6 +1113,8 @@ ESPEAK_API int espeak_GetParameter(espeak_PARAMETER parameter, int current)
 ESPEAK_API espeak_ERROR espeak_SetParameter(espeak_PARAMETER parameter, int value, int relative)
 {//=============================================================================================
   ENTER("espeak_SetParameter");
+	if((parameter < 0) || (parameter >= N_SPEECH_PARAM))
+		return(EE_INTERNAL_ERROR);
 
 	if(f_logespeak)
 	{
@@ -1089,6 +1130,8 @@ ESPEAK_API espeak_ERROR espeak_SetParameter(espeak_PARAMETER parameter, int valu
 	}
 
 	t_espeak_command* c = create_espeak_parameter(parameter, value, relative);
+	if(c == NULL)
+		return(EE_INTERNAL_ERROR);
 
 	a_error = fifo_add_command(c);
 	if (a_error != EE_OK)
@@ -1107,6 +1150,8 @@ ESPEAK_API espeak_ERROR espeak_SetPunctuationList(const wchar_t *punctlist)
 {//================================================================
   ENTER("espeak_SetPunctuationList");
   // Set the list of punctuation which are spoken for "some".
+	if(punctlist == NULL)
+		return(EE_INTERNAL_ERROR);
 
 #ifdef USE_ASYNC
 	espeak_ERROR a_error;
@@ -1118,6 +1163,8 @@ ESPEAK_API espeak_ERROR espeak_SetPunctuationList(const wchar_t *punctlist)
 	}
 
 	t_espeak_command* c = create_espeak_punctuation_list( punctlist);
+	if(c == NULL)
+		return(EE_INTERNAL_ERROR);
 	a_error = fifo_add_command(c);
 	if (a_error != EE_OK)
 	{

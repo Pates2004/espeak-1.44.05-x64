@@ -21,6 +21,9 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wctype.h>
@@ -35,6 +38,8 @@
 #include "translate.h"
 
 #ifdef PLATFORM_POSIX
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -42,7 +47,7 @@
 #define N_XML_BUF   256
 
 
-static const char *xmlbase = "";    // base URL from <speak>
+static char xmlbase[N_XML_BUF] = {0};    // base URL from <speak>
 
 static int namedata_ix=0;
 static int n_namedata = 0;
@@ -50,6 +55,8 @@ char *namedata = NULL;
 
 
 static FILE *f_input = NULL;
+static int ungot_byte = -1;
+static int ungot_byte2 = -1;
 static int ungot_char2 = 0;
 unsigned char *p_textinput;
 wchar_t *p_wchar_input;
@@ -372,19 +379,13 @@ static int IsRomanU(unsigned int c)
 static void GetC_unget(int c)
 {//==========================
 // This is only called with UTF8 input, not wchar input
-	if(f_input != NULL)
-		ungetc(c,f_input);
-	else
-	{
-		p_textinput--;
-		*p_textinput = c;
-		end_of_input = 0;
-	}
+	ungot_byte = c & 0xff;
+	end_of_input = 0;
 }
 
 int Eof(void)
 {//==========
-	if(ungot_char != 0)
+	if((ungot_char != 0) || (ungot_byte >= 0) || (ungot_byte2 >= 0))
 		return(0);
 
 	if(f_input != 0)
@@ -398,6 +399,13 @@ static int GetC_get(void)
 {//======================
 	unsigned int c;
 	unsigned int c2;
+
+	if(ungot_byte >= 0)
+	{
+		c = ungot_byte;
+		ungot_byte = -1;
+		return(c);
+	}
 
 	if(f_input != NULL)
 	{
@@ -459,7 +467,6 @@ static int GetC(void)
 	int ix;
 	int n_bytes;
 	unsigned char m;
-	static int ungot2 = 0;
 	static const unsigned char mask[4] = {0xff,0x1f,0x0f,0x07};
 	static const unsigned char mask2[4] = {0,0x80,0x20,0x30};
 
@@ -469,10 +476,10 @@ static int GetC(void)
 		return(c1);
 	}
 
-	if(ungot2 != 0)
+	if(ungot_byte2 >= 0)
 	{
-		c1 = ungot2;
-		ungot2 = 0;
+		c1 = ungot_byte2;
+		ungot_byte2 = -1;
 	}
 	else
 	{
@@ -517,7 +524,7 @@ static int GetC(void)
 				{
 					// This is not UTF8.  Change to 8-bit characterset.
 					if((n_bytes == 2) && (ix == 1))
-						ungot2 = cbuf[2];
+						ungot_byte2 = cbuf[2];
 					GetC_unget(c2);
 					break;
 				}
@@ -568,19 +575,23 @@ static const char *WordToString2(unsigned int word)
 }
 
 
-static const char *LookupSpecial(Translator *tr, const char *string, char* text_out)
-{//=================================================================================
+static const char *LookupSpecial(Translator *tr, const char *string, char* text_out, size_t text_out_size)
+{//=============================================================================================================
 	unsigned int flags[2];
 	char phonemes[55];
 	char phonemes2[55];
 	char *string1 = (char *)string;
+
+	if((text_out == NULL) || (text_out_size == 0))
+		return(NULL);
+	text_out[0] = 0;
 
 	flags[0] = flags[1] = 0;
 	if(LookupDictList(tr,&string1,phonemes,flags,0,NULL))
 	{
 		SetWordStress(tr, phonemes, flags, -1, 0);
 		DecodePhonemes(phonemes,phonemes2);
-		sprintf(text_out,"[\002%s]]",phonemes2);
+		snprintf(text_out,text_out_size,"[\002%s]]",phonemes2);
 		return(text_out);
 	}
 	return(NULL);
@@ -657,14 +668,14 @@ static const char *LookupCharName(Translator *tr, int c, int only)
 		{
 			SetWordStress(translator2, phonemes, flags, -1, 0);
 			DecodePhonemes(phonemes,phonemes2);
-			sprintf(buf,"[\002_^_%s %s _^_%s]]","en",phonemes2,WordToString2(tr->translator_name));
+			snprintf(buf,sizeof(buf),"[\002_^_%s %s _^_%s]]","en",phonemes2,WordToString2(tr->translator_name));
 			SelectPhonemeTable(voice->phoneme_tab_ix);  // revert to original phoneme table
 		}
 		else
 		{
 			SetWordStress(tr, phonemes, flags, -1, 0);
 			DecodePhonemes(phonemes,phonemes2);
-			sprintf(buf,"[\002%s]] ",phonemes2);
+			snprintf(buf,sizeof(buf),"[\002%s]] ",phonemes2);
 		}
 	}
 	else
@@ -680,15 +691,17 @@ int Read4Bytes(FILE *f)
 {//====================
 // Read 4 bytes (least significant first) into a word
 	int ix;
-	unsigned char c;
-	int acc=0;
+	int byte;
+	unsigned int acc=0;
 
 	for(ix=0; ix<4; ix++)
 	{
-		c = fgetc(f) & 0xff;
-		acc += (c << (ix*8));
+		byte = fgetc(f);
+		if(byte == EOF)
+			return(-1);
+		acc |= (static_cast<unsigned int>(static_cast<unsigned char>(byte)) << (ix*8));
 	}
-	return(acc);
+	return(static_cast<int>(acc));
 }
 
 
@@ -696,11 +709,13 @@ static int LoadSoundFile(const char *fname, int index)
 {//===================================================
 	FILE *f;
 	char *p;
-	int *ip;
 	int  length;
+	unsigned int data_size;
 	char fname_temp[100];
-	char fname2[sizeof(path_home)+13+40];
+	char fname2[sizeof(path_home)+N_XML_BUF+16];
 	fname_temp[0] = 0;
+	if((index < 0) || (index >= n_soundicon_tab))
+		return(1);
 
 	if(fname == NULL)
 	{
@@ -714,7 +729,9 @@ static int LoadSoundFile(const char *fname, int index)
 	if(fname[0] != '/')
 	{
 		// a relative path, look in espeak-data/soundicons
-		sprintf(fname2,"%s%csoundicons%c%s",path_home,PATHSEP,PATHSEP,fname);
+		int path_length = snprintf(fname2,sizeof(fname2),"%s%csoundicons%c%s",path_home,PATHSEP,PATHSEP,fname);
+		if((path_length < 0) || (path_length >= static_cast<int>(sizeof(fname2))))
+			return(3);
 		fname = fname2;
 	}
 
@@ -724,9 +741,9 @@ static int LoadSoundFile(const char *fname, int index)
 	{
 		int ix;
 		int fd_temp;
+		int convert_ok = 0;
 		const char *resample;
 		int header[3];
-		char command[sizeof(fname2)+sizeof(fname2)+40];
 
 		fseek(f,20,SEEK_SET);
 		for(ix=0; ix<3; ix++)
@@ -746,13 +763,31 @@ static int LoadSoundFile(const char *fname, int index)
 			strcpy(fname_temp,"/tmp/espeakXXXXXX");
 			if((fd_temp = mkstemp(fname_temp)) >= 0)
 			{
+				int status;
+				pid_t child;
+				char rate[16];
 				close(fd_temp);
-//			sprintf(fname_temp,"%s.wav",tmpnam(NULL));
-				sprintf(command,"sox \"%s\" -r %d -w -s -c1 %s %s\n", fname, samplerate, fname_temp, resample);
-				if(system(command) == 0)
+				snprintf(rate,sizeof(rate),"%d",samplerate);
+				child = fork();
+				if(child == 0)
+				{
+					if(resample[0] != 0)
+						execlp("sox","sox",fname,"-r",rate,"-w","-s","-c1",fname_temp,resample,(char *)NULL);
+					else
+						execlp("sox","sox",fname,"-r",rate,"-w","-s","-c1",fname_temp,(char *)NULL);
+					_exit(127);
+				}
+				if((child > 0) && (waitpid(child,&status,0) == child) && WIFEXITED(status) && (WEXITSTATUS(status) == 0))
 				{
 					fname = fname_temp;
+					convert_ok = 1;
 				}
+			}
+			if(!convert_ok)
+			{
+				if(fname_temp[0] != 0)
+					remove(fname_temp);
+				return(3);
 			}
 		}
 	}
@@ -783,6 +818,7 @@ static int LoadSoundFile(const char *fname, int index)
 		return(4);
 	}
 	soundicon_tab[index].data = p;
+	soundicon_tab[index].length = 0;
 	length = static_cast<int>(fread(p,1,length,f));
 	fclose(f);
 	if(fname_temp[0] != 0)
@@ -793,8 +829,13 @@ static int LoadSoundFile(const char *fname, int index)
 		return(4);
 	}
 
-	ip = (int *)(&p[40]);
-	soundicon_tab[index].length = (*ip) / 2;  // length in samples
+	data_size = static_cast<unsigned char>(p[40]) |
+		(static_cast<unsigned int>(static_cast<unsigned char>(p[41])) << 8) |
+		(static_cast<unsigned int>(static_cast<unsigned char>(p[42])) << 16) |
+		(static_cast<unsigned int>(static_cast<unsigned char>(p[43])) << 24);
+	if(data_size > static_cast<unsigned int>(length - 44))
+		data_size = static_cast<unsigned int>(length - 44);
+	soundicon_tab[index].length = static_cast<int>(data_size / 2);  // length in samples
 	return(0);
 }  //  end of LoadSoundFile
 
@@ -828,6 +869,8 @@ static int LoadSoundFile2(const char *fname)
 	int ix;
 	char *filename;
 	static int slot = -1;
+	if(fname == NULL)
+		return(-1);
 
 	for(ix=0; ix<n_soundicon_tab; ix++)
 	{
@@ -855,9 +898,80 @@ static int LoadSoundFile2(const char *fname)
 }
 
 
+static int AppendOutput(char *output, int *bufix, int n_output, const char *text, int reserve)
+{//===============================================================================================
+	int available;
+	int copy_length;
+	int limit;
+	int text_length;
 
-static int AnnouncePunctuation(Translator *tr, int c1, int *c2_ptr, char *output, int *bufix, int end_clause)
-{//==========================================================================================================
+	if((output == NULL) || (bufix == NULL) || (text == NULL) || (n_output <= 0))
+		return(0);
+	if(*bufix < 0)
+		*bufix = 0;
+	if(reserve < 1)
+		reserve = 1;
+	limit = n_output - reserve;
+	if(limit < 0)
+		limit = 0;
+	if(*bufix > limit)
+		*bufix = limit;
+
+	available = limit - *bufix;
+	text_length = static_cast<int>(strlen(text));
+	copy_length = (text_length < available) ? text_length : available;
+	if(copy_length > 0)
+	{
+		memcpy(&output[*bufix],text,copy_length);
+		*bufix += copy_length;
+	}
+	output[*bufix] = 0;
+	return(copy_length);
+}
+
+
+static int AppendOutputChar(char *output, int *bufix, int n_output, int c, int reserve)
+{//===============================================================================================
+	char text[2];
+	text[0] = static_cast<char>(c);
+	text[1] = 0;
+	return(AppendOutput(output,bufix,n_output,text,reserve));
+}
+
+
+static int AppendOutputCodepoint(char *output, int *bufix, int n_output, unsigned int c, int reserve)
+{//================================================================================================
+	char utf8[8];
+	int length;
+	int limit;
+
+	if((output == NULL) || (bufix == NULL) || (n_output <= 0))
+		return(0);
+	if(*bufix < 0)
+		*bufix = 0;
+	if(reserve < 1)
+		reserve = 1;
+	limit = n_output - reserve;
+	if(limit < 0)
+		limit = 0;
+	length = utf8_out(c,utf8);
+	if((length <= 0) || (*bufix > limit) || (length > (limit - *bufix)))
+	{
+		if(*bufix > limit)
+			*bufix = limit;
+		output[*bufix] = 0;
+		return(0);
+	}
+	memcpy(&output[*bufix],utf8,length);
+	*bufix += length;
+	output[*bufix] = 0;
+	return(length);
+}
+
+
+
+static int AnnouncePunctuation(Translator *tr, int c1, int *c2_ptr, char *output, int *bufix, int n_output, int end_clause)
+{//========================================================================================================================
 	// announce punctuation names
 	// c1:  the punctuation character
 	// c2:  the following character
@@ -944,9 +1058,9 @@ static int AnnouncePunctuation(Translator *tr, int c1, int *c2_ptr, char *output
 		return(-1);
 
 	bufix1 = *bufix;
-	len = static_cast<int>(strlen(buf));
-	strcpy(&output[*bufix],buf);
-	*bufix += len;
+	len = AppendOutput(output,bufix,n_output,buf,6);
+	if(len == 0)
+		return(CLAUSE_NONE);
 
 	if(end_clause==0)
 		return(-1);
@@ -1092,8 +1206,8 @@ static const char *VoiceFromStack()
 
 
 
-static void ProcessParamStack(char *outbuf, int &outix)
-{//====================================================
+static void ProcessParamStack(char *outbuf, int &outix, int n_outbuf)
+{//==================================================================
 // Set the speech parameters from the parameter stack
 	int param;
 	int ix;
@@ -1117,32 +1231,51 @@ static void ProcessParamStack(char *outbuf, int &outix)
 
 	for(param=0; param<N_SPEECH_PARAM; param++)
 	{
-		if((value = new_parameters[param]) != speech_parameters[param])
+		value = new_parameters[param];
+		if((value >= 0) && (value != speech_parameters[param]))
 		{
 			buf[0] = 0;
 
 			switch(param)
 			{
 			case espeakPUNCTUATION:
-				option_punctuation = value-1;
+				if(value <= espeakPUNCT_SOME)
+					option_punctuation = value;
 				break;
 
 			case espeakCAPITALS:
-				option_capitals = value;
+				if(value >= 0)
+					option_capitals = value;
 				break;
 
 			case espeakRATE:
+				if(value < 80) value = 80;
+				if(value > 600) value = 600;
+				snprintf(buf,sizeof(buf),"%c%d%c",CTRL_EMBEDDED,value,cmd_letter[param]);
+				break;
+
 			case espeakVOLUME:
+				if(value < 0) value = 0;
+				if(value > 300) value = 300;
+				snprintf(buf,sizeof(buf),"%c%d%c",CTRL_EMBEDDED,value,cmd_letter[param]);
+				break;
+
 			case espeakPITCH:
 			case espeakRANGE:
+				if(value < 0) value = 0;
+				if(value > 99) value = 99;
+				snprintf(buf,sizeof(buf),"%c%d%c",CTRL_EMBEDDED,value,cmd_letter[param]);
+				break;
+
 			case espeakEMPHASIS:
-				sprintf(buf,"%c%d%c",CTRL_EMBEDDED,value,cmd_letter[param]);
+				if(value < 0) value = 0;
+				if(value > 4) value = 4;
+				snprintf(buf,sizeof(buf),"%c%d%c",CTRL_EMBEDDED,value,cmd_letter[param]);
 				break;
 			}
 
-			speech_parameters[param] = new_parameters[param];
-			strcpy(&outbuf[outix],buf);
-			outix += static_cast<int>(strlen(buf));
+			speech_parameters[param] = value;
+			AppendOutput(outbuf,&outix,n_outbuf,buf,6);
 		}
 	}
 }  // end of ProcessParamStack
@@ -1166,8 +1299,8 @@ static PARAM_STACK *PushParamStack(int tag_type)
 }  //  end of PushParamStack
 
 
-static void PopParamStack(int tag_type, char *outbuf, int &outix)
-{//==============================================================
+static void PopParamStack(int tag_type, char *outbuf, int &outix, int n_outbuf)
+{//============================================================================
 	// unwind the stack up to and including the previous tag of this type
 	int ix;
 	int top = 0;
@@ -1186,7 +1319,7 @@ static void PopParamStack(int tag_type, char *outbuf, int &outix)
 	{
 		n_param_stack = top;
 	}
-	ProcessParamStack(outbuf, outix);
+	ProcessParamStack(outbuf, outix, n_outbuf);
 }  // end of PopParamStack
 
 
@@ -1259,17 +1392,26 @@ static int attrnumber(const wchar_t *pw, int default_value, int type)
 {//==================================================================
 	int value = 0;
 
-	if((pw == NULL) || !isdigit(*pw))
+	if((pw == NULL) || !iswdigit(*pw))
 		return(default_value);
 
-	while(isdigit(*pw))
+	while(iswdigit(*pw))
 	{
+		if(value > ((INT_MAX - 9) / 10))
+		{
+			value = INT_MAX;
+			while(iswdigit(*pw)) pw++;
+			break;
+		}
 		value = value*10 + *pw++ - '0';
 	}
 	if((type==1) && (towlower(*pw)=='s'))
 	{
 		// time: seconds rather than ms
-		value *= 1000;
+		if(value > (INT_MAX / 1000))
+			value = INT_MAX;
+		else
+			value *= 1000;
 	}
 	return(value);
 }  // end of attrnumber
@@ -1319,7 +1461,7 @@ static int attr_prosody_value(int param_type, const wchar_t *pw, int *value_out)
 		sign = -1;
 	}
 	value = (float)wcstod(pw,&tail);
-	if(tail == pw)
+	if((tail == pw) || !(value >= 0))
 	{
 		// failed to find a number, return 100%
 		*value_out = 100;
@@ -1330,6 +1472,7 @@ static int attr_prosody_value(int param_type, const wchar_t *pw, int *value_out)
 	{
 		if(sign != 0)
 			value = 100 + (sign * value);
+		if(value > 100000) value = 100000;
 		*value_out = (int)value;
 		return(2);   // percentage
 	}
@@ -1339,16 +1482,20 @@ static int attr_prosody_value(int param_type, const wchar_t *pw, int *value_out)
 		double x;
 		// convert from semitones to a  frequency percentage
 		x = pow(double(2.0),double((value*sign)/12)) * 100;
+		if(x > 100000) x = 100000;
+		if(x < 0) x = 0;
 		*value_out = (int)x;
 		return(2);   // percentage
 	}
 
 	if(param_type == espeakRATE)
 	{
+		if(value > 1000) value = 1000;
 		*value_out = (int)(value * 100);
 		return(2);   // percentage
 	}
 
+	if(value > 100000) value = 100000;
 	*value_out = (int)value;
 	return(sign);   // -1, 0, or 1
 }  // end of attr_prosody_value
@@ -1359,32 +1506,55 @@ int AddNameData(const char *name, int wide)
 // Add the name to the namedata and return its position
 // (Used by the Windows SAPI wrapper)
 	int ix;
-	int len;
+	size_t len;
+	size_t required;
+	size_t write_ix;
 	void *vp;
+	const size_t max_namedata = 0x7fffff;
+
+	if(name == NULL)
+		return(-1);
 
 	if(wide)
 	{
-		len = static_cast<int>((wcslen((const wchar_t *)name)+1)*sizeof(wchar_t));
-		n_namedata = (n_namedata + sizeof(wchar_t) - 1) % sizeof(wchar_t);  // round to wchar_t boundary
+		size_t n_characters = static_cast<size_t>(wcslen((const wchar_t *)name));
+		if(n_characters >= (max_namedata/sizeof(wchar_t)))
+			return(-1);
+		len = (n_characters+1)*sizeof(wchar_t);
+		write_ix = (static_cast<size_t>(namedata_ix) + sizeof(wchar_t) - 1) & ~(sizeof(wchar_t) - 1);
 	}
 	else
 	{
-		len = static_cast<int>(strlen(name))+1;
+		len = strlen(name)+1;
+		write_ix = static_cast<size_t>(namedata_ix);
 	}
+	if((write_ix > max_namedata) || (len > (max_namedata - write_ix)))
+		return(-1);
+	required = write_ix + len;
 
-	if(namedata_ix+len >= n_namedata)
+	if(required >= static_cast<size_t>(n_namedata))
 	{
 		// allocate more space for marker names
-		if((vp = realloc(namedata, namedata_ix+len + 300)) == NULL)
+		size_t new_size = required + 300;
+		if(new_size > max_namedata)
+			new_size = max_namedata;
+		if((vp = realloc(namedata,new_size)) == NULL)
 			return(-1);  // failed to allocate, original data is unchanged but ignore this new name
 
 		namedata = (char *)vp;
-		n_namedata = namedata_ix+len + 300;
+		n_namedata = static_cast<int>(new_size);
 	}
-	memcpy(&namedata[ix = namedata_ix],name,len);
-	namedata_ix += len;
+	ix = static_cast<int>(write_ix);
+	memcpy(&namedata[ix],name,len);
+	namedata_ix = static_cast<int>(required);
 	return(ix);
 }  //  end of AddNameData
+
+
+int IsNameDataIndex(unsigned int index)
+{//====================================
+	return((namedata != NULL) && (index < static_cast<unsigned int>(namedata_ix)));
+}
 
 
 void SetVoiceStack(espeak_VOICE *v)
@@ -1398,9 +1568,9 @@ void SetVoiceStack(espeak_VOICE *v)
 		return;
 	}
 	if(v->languages != NULL)
-		strcpy(sp->language,v->languages);
+		snprintf(sp->language,sizeof(sp->language),"%s",v->languages);
 	if(v->name != NULL)
-		strcpy(sp->voice_name,v->name);
+		snprintf(sp->voice_name,sizeof(sp->voice_name),"%s",v->name);
 	sp->voice_variant = v->variant;
 	sp->voice_age = v->age;
 	sp->voice_gender = v->gender;
@@ -1461,6 +1631,8 @@ static int GetVoiceAttributes(wchar_t *pw, int tag_type)
 		if((tag_type != SSML_VOICE) && (lang==NULL))
 			return(0);  // <s> or <p> without language spec, nothing to do
 	
+		if(n_ssml_stack >= N_SSML_STACK)
+			return(0);
 		ssml_sp = &ssml_stack[n_ssml_stack++];
 
 		attrcopy_utf8(ssml_sp->language,lang,sizeof(ssml_sp->language));
@@ -1475,7 +1647,7 @@ static int GetVoiceAttributes(wchar_t *pw, int tag_type)
 	if(strcmp(new_voice_id,current_voice_id) != 0)
 	{
 		// add an embedded command to change the voice
-		strcpy(current_voice_id,new_voice_id);
+		snprintf(current_voice_id,sizeof(current_voice_id),"%s",new_voice_id);
 		return(CLAUSE_BIT_VOICE);    // change of voice
 	}
 
@@ -1487,6 +1659,7 @@ static void SetProsodyParameter(int param_type, wchar_t *attr1, PARAM_STACK *sp)
 {//=============================================================================
 	int value;
 	int sign;
+	int64_t calculated;
 
 	static const MNEM_TAB mnem_volume[] = {
 		{"default",100},
@@ -1532,26 +1705,29 @@ static void SetProsodyParameter(int param_type, wchar_t *attr1, PARAM_STACK *sp)
 	if((value = attrlookup(attr1,mnem_tabs[param_type])) >= 0)
 	{
 		// mnemonic specifies a value as a percentage of the base pitch/range/rate/volume
-		sp->parameter[param_type] = (param_stack[0].parameter[param_type] * value)/100;
+		calculated = (static_cast<int64_t>(param_stack[0].parameter[param_type]) * value)/100;
 	}
 	else
 	{
 		sign = attr_prosody_value(param_type,attr1,&value);
 
 		if(sign == 0)
-			sp->parameter[param_type] = value;   // absolute value in Hz
+			calculated = value;   // absolute value in Hz
 		else
 		if(sign == 2)
 		{
 			// change specified as percentage or in semitones
-			sp->parameter[param_type] = (speech_parameters[param_type] * value)/100;
+			calculated = (static_cast<int64_t>(speech_parameters[param_type]) * value)/100;
 		}
 		else
 		{
 			// change specified as plus or minus Hz
-			sp->parameter[param_type] = speech_parameters[param_type] + (value*sign);
+			calculated = static_cast<int64_t>(speech_parameters[param_type]) + (static_cast<int64_t>(value)*sign);
 		}
 	}
+	if(calculated > INT_MAX) calculated = INT_MAX;
+	if(calculated < INT_MIN) calculated = INT_MIN;
+	sp->parameter[param_type] = static_cast<int>(calculated);
 }  // end of SetProsodyParemeter
 
 
@@ -1607,9 +1783,9 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 	SSML_STACK *ssml_sp;
 
 	static const MNEM_TAB mnem_punct[] = {
-		{"none", 1},
-		{"all", 2},
-		{"some", 3},
+		{"none", espeakPUNCT_NONE},
+		{"all", espeakPUNCT_ALL},
+		{"some", espeakPUNCT_SOME},
 		{NULL, -1}};
 
 	static const MNEM_TAB mnem_capitals[] = {
@@ -1654,7 +1830,9 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 	{
 		if(((c = xml_buf[ix]) == 0) || iswspace(c))
 			break;
-		tag_name[ix] = tolower((char)c);
+		if(c > 0x7f)
+			break;
+		tag_name[ix] = static_cast<char>(towlower(c));
 	}
 	tag_name[ix] = 0;
 
@@ -1665,7 +1843,7 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 		// closing tag
 		if((tag_type = LookupMnem(ssmltags,&tag_name[1])) != HTML_NOSPACE)
 		{
-			outbuf[outix++] = ' ';
+			AppendOutputChar(outbuf,&outix,n_outbuf,' ',6);
 		}
 		tag_type += SSML_CLOSE;
 	}
@@ -1674,10 +1852,10 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 		if((tag_type = LookupMnem(ssmltags,tag_name)) != HTML_NOSPACE)
 		{
 			// separate SSML tags from the previous word (but not HMTL tags such as <b> <font> which can occur inside a word)
-			outbuf[outix++] = ' ';
+			AppendOutputChar(outbuf,&outix,n_outbuf,' ',6);
 		}
 
-		if(self_closing && ignore_if_self_closing[tag_type])
+		if(self_closing && (tag_type >= 0) && (tag_type < static_cast<int>(sizeof(ignore_if_self_closing))) && ignore_if_self_closing[tag_type])
 			return(0);
 	}
 
@@ -1697,15 +1875,17 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 		if(attrcmp(attr1,"punctuation")==0)
 		{
 			value = attrlookup(attr2,mnem_punct);
-			sp->parameter[espeakPUNCTUATION] = value;
+			if(value >= 0)
+				sp->parameter[espeakPUNCTUATION] = value;
 		}
 		else
 		if(attrcmp(attr1,"capital_letters")==0)
 		{
 			value = attrlookup(attr2,mnem_capitals);
-			sp->parameter[espeakCAPITALS] = value;
+			if(value >= 0)
+				sp->parameter[espeakCAPITALS] = value;
 		}
-		ProcessParamStack(outbuf, outix);
+		ProcessParamStack(outbuf, outix, n_outbuf);
 		break;
 
 	case SSML_PROSODY:
@@ -1720,7 +1900,7 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 			}
 		}
 
-		ProcessParamStack(outbuf, outix);
+		ProcessParamStack(outbuf, outix, n_outbuf);
 		break;
 
 	case SSML_EMPHASIS:
@@ -1729,6 +1909,8 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 		if((attr1 = GetSsmlAttribute(px,"level")) != NULL)
 		{
 			value = attrlookup(attr1,mnem_emphasis);
+			if((value < 1) || (value > 4))
+				value = 3;
 		}
 
 		if(translator->langopts.tone_language == 1)
@@ -1743,13 +1925,13 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 		{
 			sp->parameter[espeakEMPHASIS] = value;
 		}
-		ProcessParamStack(outbuf, outix);
+		ProcessParamStack(outbuf, outix, n_outbuf);
 		break;
 
 	case SSML_STYLE + SSML_CLOSE:
 	case SSML_PROSODY + SSML_CLOSE:
 	case SSML_EMPHASIS + SSML_CLOSE:
-		PopParamStack(tag_type, outbuf, outix);
+		PopParamStack(tag_type, outbuf, outix, n_outbuf);
 		break;
 
 	case SSML_SAYAS:
@@ -1757,11 +1939,15 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 		attr2 = GetSsmlAttribute(px,"format");
 		attr3 = GetSsmlAttribute(px,"detail");
 		value = attrlookup(attr1,mnem_interpret_as);
+		if(value < 0)
+			value = 0;
 		value2 = attrlookup(attr2,mnem_sayas_format);
 		if(value2 == 1)
 			value = SAYAS_GLYPHS;
 
 		value3 = attrnumber(attr3,0,0);
+		if(value3 > 15)
+			value3 = 15;
 
 		if(value == SAYAS_DIGITS)
 		{
@@ -1771,9 +1957,8 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 				value = SAYAS_DIGITS + value3;
 		}
 
-		sprintf(buf,"%c%dY",CTRL_EMBEDDED,value);
-		strcpy(&outbuf[outix],buf);
-		outix += static_cast<int>(strlen(buf));
+		snprintf(buf,sizeof(buf),"%c%dY",CTRL_EMBEDDED,value);
+		AppendOutput(outbuf,&outix,n_outbuf,buf,6);
 
 		sayas_start = outix;
 		sayas_mode = value;   // punctuation doesn't end clause during SAY-AS
@@ -1782,21 +1967,24 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 	case SSML_SAYAS + SSML_CLOSE:
 		if(sayas_mode == SAYAS_KEY)
 		{
-			outbuf[outix] = 0;
+			if((outix >= 0) && (outix < n_outbuf))
+				outbuf[outix] = 0;
 			ReplaceKeyName(outbuf, sayas_start, outix);
 		}
 
-		outbuf[outix++] = CTRL_EMBEDDED;
-		outbuf[outix++] = 'Y';
+		AppendOutputChar(outbuf,&outix,n_outbuf,CTRL_EMBEDDED,6);
+		AppendOutputChar(outbuf,&outix,n_outbuf,'Y',6);
 		sayas_mode = 0;
 		break;
 
 	case SSML_SUB:
 		if((attr1 = GetSsmlAttribute(px,"alias")) != NULL)
 		{
+			char alias[N_XML_BUF*4+1];
 			// use the alias  rather than the text
 			ignore_text = 1;
-			outix += attrcopy_utf8(&outbuf[outix],attr1,n_outbuf-outix);
+			attrcopy_utf8(alias,attr1,sizeof(alias));
+			AppendOutput(outbuf,&outix,n_outbuf,alias,6);
 		}
 		break;
 
@@ -1825,9 +2013,8 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 
 			if((index = AddNameData(buf,0)) >= 0)
 			{
-				sprintf(buf,"%c%dM",CTRL_EMBEDDED,index);
-				strcpy(&outbuf[outix],buf);
-				outix += static_cast<int>(strlen(buf));
+				snprintf(buf,sizeof(buf),"%c%dM",CTRL_EMBEDDED,index);
+				AppendOutput(outbuf,&outix,n_outbuf,buf,6);
 			}
 		}
 		break;
@@ -1838,14 +2025,18 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 		if((attr1 = GetSsmlAttribute(px,"src")) != NULL)
 		{
 			char fname[256];
+			int path_length;
 			attrcopy_utf8(buf,attr1,sizeof(buf));
 
 			if(uri_callback == NULL)
 			{
-				if((xmlbase != NULL) && (buf[0] != '/'))
+				if((xmlbase[0] != 0) && (buf[0] != '/'))
 				{
-					sprintf(fname,"%s/%s",xmlbase,buf);
-					index = LoadSoundFile2(fname);
+					path_length = snprintf(fname,sizeof(fname),"%s/%s",xmlbase,buf);
+					if((path_length >= 0) && (path_length < static_cast<int>(sizeof(fname))))
+						index = LoadSoundFile2(fname);
+					else
+						index = -1;
 				}
 				else
 				{
@@ -1853,9 +2044,8 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 				}
 				if(index >= 0)
 				{
-					sprintf(buf,"%c%dI",CTRL_EMBEDDED,index);
-					strcpy(&outbuf[outix],buf);
-					outix += static_cast<int>(strlen(buf));
+					snprintf(buf,sizeof(buf),"%c%dI",CTRL_EMBEDDED,index);
+					AppendOutput(outbuf,&outix,n_outbuf,buf,6);
 					sp->parameter[espeakSILENCE] = 1;
 				}
 			}
@@ -1866,24 +2056,23 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 					uri = &namedata[index];
 					if(uri_callback(1,uri,xmlbase) == 0)
 					{
-						sprintf(buf,"%c%dU",CTRL_EMBEDDED,index);
-						strcpy(&outbuf[outix],buf);
-						outix += static_cast<int>(strlen(buf));
+						snprintf(buf,sizeof(buf),"%c%dU",CTRL_EMBEDDED,index);
+						AppendOutput(outbuf,&outix,n_outbuf,buf,6);
 						sp->parameter[espeakSILENCE] = 1;
 					}
 				}
 			}
 		}
-		ProcessParamStack(outbuf, outix);
+		ProcessParamStack(outbuf, outix, n_outbuf);
 
 		if(self_closing)
-			PopParamStack(tag_type, outbuf, outix);
+			PopParamStack(tag_type, outbuf, outix, n_outbuf);
 		else
 			audio_text = 1;
 		return(CLAUSE_NONE);
 
 	case SSML_AUDIO + SSML_CLOSE:
-		PopParamStack(tag_type, outbuf, outix);
+		PopParamStack(tag_type, outbuf, outix, n_outbuf);
 		audio_text = 0;
 		return(CLAUSE_NONE);
 
@@ -1895,18 +2084,22 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 		{
 			static int break_value[6] = {0,7,14,21,40,80};  // *10mS
 			value = attrlookup(attr1,mnem_break);
+			if((value < 0) || (value >= static_cast<int>(sizeof(break_value)/sizeof(break_value[0]))))
+				value = 3;
 			if(value < 3)
 			{
 				// adjust prepause on the following word
-				sprintf(&outbuf[outix],"%c%dB",CTRL_EMBEDDED,value);
-				outix += 3;
+				snprintf(buf,sizeof(buf),"%c%dB",CTRL_EMBEDDED,value);
+				AppendOutput(outbuf,&outix,n_outbuf,buf,6);
 				terminator = 0;
 			}
 			value = break_value[value];
 		}
 		if((attr2 = GetSsmlAttribute(px,"time")) != NULL)
 		{
-			value = (attrnumber(attr2,0,1) * 25) / speed.pause_factor; // compensate for speaking speed to keep constant pause length
+			int pause_factor = (speed.pause_factor > 0) ? speed.pause_factor : 1;
+			int64_t pause_value = (static_cast<int64_t>(attrnumber(attr2,0,1)) * 25) / pause_factor;
+			value = (pause_value > 0xfff) ? 0xfff : static_cast<int>(pause_value); // compensate for speaking speed to keep constant pause length
 
 			if(terminator == 0)
 				terminator = CLAUSE_NONE;
@@ -1922,11 +2115,7 @@ static int ProcessSsmlTag(wchar_t *xml_buf, char *outbuf, int &outix, int n_outb
 	case SSML_SPEAK:
 		if((attr1 = GetSsmlAttribute(px,"xml:base")) != NULL)
 		{
-			attrcopy_utf8(buf,attr1,sizeof(buf));
-			if((index = AddNameData(buf,0)) >= 0)
-			{
-				xmlbase = &namedata[index];
-			}
+			attrcopy_utf8(xmlbase,attr1,sizeof(xmlbase));
 		}
 		if(GetVoiceAttributes(px, tag_type) == 0)
 			return(0);   // no voice change
@@ -2160,11 +2349,24 @@ f_input = f_in;  // for GetC etc
 				{
 					if(xml_buf2[0] == '#')
 					{
+						char *number_end;
+						unsigned long character;
 						// character code number
+						errno = 0;
 						if(xml_buf2[1] == 'x')
-							found = sscanf(&xml_buf2[2],"%x",(unsigned int *)(&c1));
+							character = strtoul(&xml_buf2[2],&number_end,16);
 						else
-							found = sscanf(&xml_buf2[1],"%d",&c1);
+							character = strtoul(&xml_buf2[1],&number_end,10);
+						if((errno == 0) && (number_end != &xml_buf2[(xml_buf2[1] == 'x') ? 2 : 1]) && (*number_end == 0) &&
+							(character <= 0x10ffff) && !((character >= 0xd800) && (character <= 0xdfff)))
+						{
+							c1 = static_cast<int>(character);
+							found = 1;
+						}
+						else
+						{
+							found = 0;
+						}
 					}
 					else
 					{
@@ -2261,7 +2463,7 @@ f_input = f_in;  // for GetC etc
 			{
 				charix[ix] = count_characters - clause_start_char;
 				*charix_top = ix;
-				ix += utf8_out(c1,&buf[ix]);
+				AppendOutputCodepoint(buf,&ix,n_buf,c1,2);
 				terminator = CLAUSE_PERIOD;  // line doesn't end in punctuation, assume period
 			}
 			else
@@ -2289,8 +2491,7 @@ f_input = f_in;  // for GetC etc
 			{
 				// set the punctuation option from an embedded command
 				//  B0     B1     B<punct list><space>
-				strcpy(&buf[ix],"   ");
-				ix += 3;
+				AppendOutput(buf,&ix,n_buf,"   ",6);
 
 				if((c2 = GetC()) == '0')
 					option_punctuation = 0;
@@ -2304,9 +2505,11 @@ f_input = f_in;  // for GetC etc
 						j = 0;
 						while(!iswspace(c2) && !Eof())
 						{
-							option_punctlist[j++] = c2;
+							if(j < (N_PUNCTLIST-1))
+								option_punctlist[j++] = c2;
 							c2 = GetC();
-							buf[ix++] = ' ';
+							if(ix < (n_buf-2))
+								buf[ix++] = ' ';
 						}
 						option_punctlist[j] = 0;  // terminate punctuation list
 						option_punctuation = 2;
@@ -2369,11 +2572,11 @@ f_input = f_in;  // for GetC etc
 			{
 				char text_buf[40];
 				char text_buf2[30];
-				if(LookupSpecial(tr, "_cap", text_buf2) != NULL)
+				if(LookupSpecial(tr, "_cap", text_buf2, sizeof(text_buf2)) != NULL)
 				{
 					sprintf(text_buf,"%s",text_buf2);
 					j = static_cast<int>(strlen(text_buf));
-					if((ix + j) < n_buf)
+					if((ix + j) < (n_buf-2))
 					{
 						strcpy(&buf[ix],text_buf);
 						ix += j;
@@ -2508,7 +2711,7 @@ if(option_ssml) parag=1;
 				if((option_punctuation == 1) || (wcschr(option_punctlist,c1) != NULL))
 				{
 					tr->phonemes_repeat_count = 0;
-					if((terminator = AnnouncePunctuation(tr, c1, &c2, buf, &ix, is_end_clause)) >= 0)
+					if((terminator = AnnouncePunctuation(tr, c1, &c2, buf, &ix, n_buf, is_end_clause)) >= 0)
 						return(terminator);
 					announced_punctuation = c1;
 				}
@@ -2517,13 +2720,9 @@ if(option_ssml) parag=1;
 			if((punct_data & PUNCT_SAY_NAME) && (announced_punctuation == 0))
 			{
 				// used for elipsis (and 3 dots) if a pronunciation for elipsis is given in *_list
-				char *p2;
-
-				p2 = &buf[ix];
-				sprintf(p2,"%s",LookupCharName(tr, c1, 1));
-				if(p2[0] != 0)
+				j = AppendOutput(buf,&ix,n_buf,LookupCharName(tr, c1, 1),6);
+				if(j > 0)
 				{
-					ix += static_cast<int>(strlen(p2));
 					announced_punctuation = c1;
 					punct_data = punct_data & ~CLAUSE_BITS_INTONATION;  // change intonation type to 0 (full-stop)
 				}
@@ -2662,7 +2861,14 @@ if(option_ssml) parag=1;
 
 		if(c1 == 0xe000 + '<') c1 = '<';
 
-		ix += utf8_out(c1,&buf[ix]);    //	buf[ix++] = c1;
+		if(AppendOutputCodepoint(buf,&ix,n_buf,c1,2) == 0)
+		{
+			buf[ix] = ' ';
+			buf[ix+1] = 0;
+			UngetC(c2);
+			ungot_char2 = c1;
+			return(CLAUSE_NONE);
+		}
 		if(!iswspace(c1) && !IsBracket(c1))
 		{
 			charix[ix] = count_characters - clause_start_char;
@@ -2684,7 +2890,7 @@ if(option_ssml) parag=1;
 
 	if(stressed_word)
 	{
-		ix += utf8_out(CHAR_EMPHASIS, &buf[ix]);
+		AppendOutputCodepoint(buf,&ix,n_buf,CHAR_EMPHASIS,2);
 	}
 	if(end_clause_after_tag)
 	{
@@ -2713,6 +2919,10 @@ void InitText2(void)
 	int param;
 
 	ungot_char = 0;
+	ungot_byte = -1;
+	ungot_byte2 = -1;
+	ungot_char2 = 0;
+	ungot_word = NULL;
 
 	n_ssml_stack =1;
 	n_param_stack = 1;
@@ -2732,5 +2942,5 @@ void InitText2(void)
 	count_characters = -1;
 	sayas_mode = 0;
 
-	xmlbase = NULL;
+	xmlbase[0] = 0;
 }
