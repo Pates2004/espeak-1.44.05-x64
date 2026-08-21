@@ -20,12 +20,17 @@
 #include "TtsEngObj.h"
 
 #include "../../../src/speak_lib.h"
-#include "stdio.h"
+#include <limits.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <wchar.h>
 
 #define CTRL_EMBEDDED  1
 
-CTTSEngObj *m_EngObj;
-ISpTTSEngineSite* m_OutputSite;
+static CTTSEngObj *m_EngObj = NULL;
+static ISpTTSEngineSite* m_OutputSite = NULL;
 FILE *f_log2=NULL;
 ULONGLONG event_interest;
 
@@ -47,26 +52,137 @@ char g_voice_name[80];
 
 char *path_install = NULL;
 
-unsigned long audio_offset = 0;
-unsigned long audio_latest = 0;
+uint64_t audio_offset = 0;
+uint64_t audio_latest = 0;
 int prev_phoneme = 0;
-int prev_phoneme_position = 0;
-unsigned long prev_phoneme_time = 0;
+uint64_t prev_phoneme_position = 0;
+uint64_t prev_phoneme_time = 0;
 
-unsigned int gBufSize = 0;
+size_t gBufCapacity = 0;
 wchar_t *TextBuf=NULL;
 
 typedef struct {
-	unsigned int bufix;
-	unsigned int textix;
-	unsigned int cmdlen;
+	size_t bufix;
+	size_t textix;
+	size_t cmdlen;
 } FRAG_OFFSET;
 
 int srate;   // samplerate, Hz/50
-int n_frag_offsets = 0;
-int frag_ix = 0;
-int frag_count=0;
+size_t n_frag_offsets = 0;
+size_t frag_ix = 0;
+size_t frag_count=0;
 FRAG_OFFSET *frag_offsets = NULL;
+
+namespace {
+
+class SapiEngineGuard final
+{
+public:
+	SapiEngineGuard() { LockSapiEngine(); }
+	~SapiEngineGuard() { UnlockSapiEngine(); }
+
+	SapiEngineGuard(const SapiEngineGuard&) = delete;
+	SapiEngineGuard& operator=(const SapiEngineGuard&) = delete;
+};
+
+class SynthesisContext final
+{
+public:
+	SynthesisContext(CTTSEngObj* engine, ISpTTSEngineSite* output_site)
+		: previous_engine_(m_EngObj), previous_output_site_(m_OutputSite)
+	{
+		m_EngObj = engine;
+		m_OutputSite = output_site;
+	}
+
+	~SynthesisContext()
+	{
+		m_EngObj = previous_engine_;
+		m_OutputSite = previous_output_site_;
+	}
+
+	SynthesisContext(const SynthesisContext&) = delete;
+	SynthesisContext& operator=(const SynthesisContext&) = delete;
+
+private:
+	CTTSEngObj* previous_engine_;
+	ISpTTSEngineSite* previous_output_site_;
+};
+
+bool CheckedAddSize(size_t left, size_t right, size_t* result)
+{
+	const size_t maximum = ~(size_t)0;
+	if((result == NULL) || (right > maximum - left))
+		return false;
+	*result = left + right;
+	return true;
+}
+
+bool CheckedMultiplySize(size_t left, size_t right, size_t* result)
+{
+	const size_t maximum = ~(size_t)0;
+	if((result == NULL) || ((left != 0) && (right > maximum / left)))
+		return false;
+	*result = left * right;
+	return true;
+}
+
+ULONGLONG AudioStreamOffset(uint64_t audio_position_ms)
+{
+	if((srate <= 0) || (audio_position_ms > ULLONG_MAX / (uint64_t)srate))
+		return ULLONG_MAX;
+	return (audio_position_ms * (uint64_t)srate) / 10u;
+}
+
+uint64_t AddAudioPosition(uint64_t base, int position)
+{
+	if(position <= 0)
+		return base;
+	const uint64_t increment = (uint64_t)position;
+	return (increment > ULLONG_MAX - base) ? ULLONG_MAX : base + increment;
+}
+
+LPARAM SizeToLParam(size_t value)
+{
+	const size_t maximum = (size_t)INT64_MAX;
+	return (LPARAM)((value > maximum) ? maximum : value);
+}
+
+bool AppendEmbeddedCommand(char* buffer, size_t capacity, size_t* length,
+	int value, char suffix)
+{
+	if((buffer == NULL) || (length == NULL) || (*length >= capacity))
+		return false;
+	const int written = _snprintf_s(&buffer[*length],capacity-*length,_TRUNCATE,
+		"%c%d%c",CTRL_EMBEDDED,value,suffix);
+	if(written < 0)
+		return false;
+	*length += (size_t)written;
+	return true;
+}
+
+bool EnsureFragOffsetCapacity(size_t required)
+{
+	if(required <= n_frag_offsets)
+		return true;
+
+	size_t new_capacity;
+	size_t allocation_size;
+	if(!CheckedAddSize(required,499u,&new_capacity))
+		return false;
+	new_capacity -= new_capacity % 500u;
+	if(!CheckedMultiplySize(new_capacity,sizeof(FRAG_OFFSET),&allocation_size))
+		return false;
+
+	FRAG_OFFSET* resized = (FRAG_OFFSET*)realloc(frag_offsets,allocation_size);
+	if(resized == NULL)
+		return false;
+	frag_offsets = resized;
+	n_frag_offsets = new_capacity;
+	return true;
+}
+
+}  // namespace
 
 
 //#define TEST_INPUT    // printf input text received from SAPI to espeak_text_log.txt
@@ -156,11 +272,11 @@ int SynthCallback(short *wav, int numsamples, espeak_EVENT *events);
 
 int SynthCallback(short *wav, int numsamples, espeak_EVENT *events)
 {//================================================================
-	int hr;
+	HRESULT hr;
 	wchar_t *tailptr;
-	unsigned int text_offset;
-	int length;
-	int phoneme_duration;
+	size_t text_offset;
+	size_t length;
+	uint64_t phoneme_duration;
 	int this_viseme;
 
 	espeak_EVENT *event;
@@ -168,6 +284,9 @@ int SynthCallback(short *wav, int numsamples, espeak_EVENT *events)
 	int n_Events = 0;
 	SPEVENT *Event;
 	SPEVENT Events[N_EVENTS];
+
+	if((m_EngObj == NULL) || (m_OutputSite == NULL) || (events == NULL))
+		return(1);
 
 	if(m_OutputSite->GetActions() & SPVES_ABORT)
 		return(1);
@@ -178,36 +297,44 @@ int SynthCallback(short *wav, int numsamples, espeak_EVENT *events)
 	for(event=events; (event->type != 0) && (n_Events < N_EVENTS); event++)
 	{
 
-		audio_latest = event->audio_position + audio_offset;
+		audio_latest = AddAudioPosition(audio_offset,event->audio_position);
 
-		if((event->type == espeakEVENT_WORD) && (event->length > 0))
+		if((event->type == espeakEVENT_WORD) && (event->length > 0) &&
+			(frag_count > 0) && (frag_offsets != NULL))
 		{
+			const size_t event_position = (event->text_position > 0)
+				? (size_t)(event->text_position-1) : 0;
 			while(((frag_ix+1) < frag_count) &&
-				((event->text_position -1 + frag_offsets[frag_ix+1].cmdlen) >= frag_offsets[frag_ix+1].bufix))
+				(event_position >= frag_offsets[frag_ix+1].bufix -
+					((frag_offsets[frag_ix+1].cmdlen < frag_offsets[frag_ix+1].bufix)
+						? frag_offsets[frag_ix+1].cmdlen : frag_offsets[frag_ix+1].bufix)))
 			{
 				frag_ix++;
 			}
-			text_offset = frag_offsets[frag_ix].textix + 
-				event->text_position -1 - frag_offsets[frag_ix].bufix + frag_offsets[frag_ix].cmdlen;
-			length = event->length - frag_offsets[frag_ix].cmdlen;
-			frag_offsets[frag_ix].cmdlen = 0;
 
-			if(text_offset < 0)
-				text_offset = 0;
+			const size_t command_length = frag_offsets[frag_ix].cmdlen;
+			const size_t adjusted_position = event_position + command_length;
+			const size_t relative_position = (adjusted_position >= frag_offsets[frag_ix].bufix)
+				? adjusted_position-frag_offsets[frag_ix].bufix : 0;
+			if(!CheckedAddSize(frag_offsets[frag_ix].textix,relative_position,&text_offset))
+				text_offset = ~(size_t)0;
+			length = ((size_t)event->length > command_length)
+				? (size_t)event->length-command_length : 0;
+			frag_offsets[frag_ix].cmdlen = 0;
 
 			Event = &Events[n_Events++];
 			Event->eEventId             = SPEI_WORD_BOUNDARY;
 			Event->elParamType          = SPET_LPARAM_IS_UNDEFINED;
-			Event->ullAudioStreamOffset = ((event->audio_position + audio_offset) * srate)/10;  // ms -> bytes
-			Event->lParam               = text_offset;
-			Event->wParam               = length;
+			Event->ullAudioStreamOffset = AudioStreamOffset(audio_latest);
+			Event->lParam               = SizeToLParam(text_offset);
+			Event->wParam               = (WPARAM)length;
 		}
-		if(event->type == espeakEVENT_MARK)
+		if((event->type == espeakEVENT_MARK) && (event->id.name != NULL))
 		{
 			Event = &Events[n_Events++];
 			Event->eEventId             = SPEI_TTS_BOOKMARK;
 			Event->elParamType          = SPET_LPARAM_IS_STRING;
-			Event->ullAudioStreamOffset = ((event->audio_position + audio_offset) * srate)/10;  // ms -> bytes
+			Event->ullAudioStreamOffset = AudioStreamOffset(audio_latest);
 			Event->lParam               = reinterpret_cast<LPARAM>(event->id.name);
 			Event->wParam               = wcstol((wchar_t *)event->id.name,&tailptr,10);
 		}
@@ -215,7 +342,8 @@ int SynthCallback(short *wav, int numsamples, espeak_EVENT *events)
 		{
 			if(event_interest & SPEI_VISEME)
 			{
-				phoneme_duration = audio_latest - prev_phoneme_time;
+				phoneme_duration = (audio_latest >= prev_phoneme_time)
+					? audio_latest-prev_phoneme_time : 0;
 
 				// ignore some phonemes (which translate to viseme=255)
 				if((this_viseme = VisemeCode(event->id.number)) != 255)
@@ -223,13 +351,15 @@ int SynthCallback(short *wav, int numsamples, espeak_EVENT *events)
 					Event = &Events[n_Events++];
 					Event->eEventId             = SPEI_VISEME;
 					Event->elParamType          = SPET_LPARAM_IS_UNDEFINED;
-					Event->ullAudioStreamOffset = ((prev_phoneme_position + audio_offset) * srate)/10;  // ms -> bytes
-					Event->lParam               = phoneme_duration << 16 | this_viseme;
+					Event->ullAudioStreamOffset = AudioStreamOffset(prev_phoneme_position);
+					if(phoneme_duration > 0xffffu)
+						phoneme_duration = 0xffffu;
+					Event->lParam               = (LPARAM)((phoneme_duration << 16) | (uint64_t)this_viseme);
 					Event->wParam               = VisemeCode(prev_phoneme);
 
 					prev_phoneme = event->id.number;
 					prev_phoneme_time = audio_latest;
-					prev_phoneme_position = event->audio_position;
+					prev_phoneme_position = audio_latest;
 				}
 			}
 		}
@@ -246,11 +376,19 @@ int SynthCallback(short *wav, int numsamples, espeak_EVENT *events)
 #endif
 	}
 	if(n_Events > 0)
-		m_OutputSite->AddEvents(Events, n_Events );
+	{
+		hr = m_OutputSite->AddEvents(Events, n_Events );
+		if(FAILED(hr))
+			return(1);
+	}
 
 	// return the sound data
-	hr = m_OutputSite->Write(wav, numsamples*2, NULL);
-	return(hr);
+	if(numsamples <= 0)
+		return(0);
+	if((wav == NULL) || ((unsigned int)numsamples > (ULONG_MAX/sizeof(short))))
+		return(1);
+	hr = m_OutputSite->Write(wav,(ULONG)((unsigned int)numsamples*sizeof(short)),NULL);
+	return(FAILED(hr) ? 1 : 0);
 }
 
 
@@ -348,8 +486,6 @@ f_log2=fopen("C:\\log_espeak","a");
 if(f_log2) fprintf(f_log2,"\n****\n");
 #endif
 
-	m_EngObj = this;
-
     return hr;
 } /* CTTSEngObj::FinalConstruct */
 
@@ -366,19 +502,24 @@ if(f_log2!=NULL) fclose(f_log2);
 //=== ISpObjectWithToken Implementation ======================================
 //
 
-void WcharToChar(char *out, const wchar_t *in, int len)
+int WcharToChar(char *out, const wchar_t *in, int len)
 {//====================================================
 	if(out == NULL || len <= 0)
-		return;
+		return(0);
 	out[0] = 0;
 	if(in == NULL)
-		return;
+		return(0);
 	if(WideCharToMultiByte(CP_ACP, 0, in, -1, out, len, NULL, NULL) == 0)
+	{
 		out[len-1] = 0;
+		return(0);
+	}
+	return(1);
 }
 
 STDMETHODIMP CTTSEngObj::GetObjectToken(ISpObjectToken** ppToken)
 {
+	SapiEngineGuard guard;
 	if(ppToken == NULL)
 		return E_POINTER;
 	*ppToken = m_cpToken;
@@ -398,65 +539,93 @@ STDMETHODIMP CTTSEngObj::GetObjectToken(ISpObjectToken** ppToken)
 *****************************************************************************/
 STDMETHODIMP CTTSEngObj::SetObjectToken(ISpObjectToken * pToken)
 {
-	strcpy(voice_name,"default");
-
 	if(pToken == NULL)
 		return E_INVALIDARG;
+	SapiEngineGuard guard;
 	if(m_cpToken != NULL)
 		return HRESULT_FROM_WIN32(ERROR_ALREADY_INITIALIZED);
-	pToken->AddRef();
-	m_cpToken = pToken;
-	HRESULT hr = S_OK;
 
-	if( SUCCEEDED( hr ) )
+	char new_voice_name[sizeof(voice_name)];
+	strcpy_s(new_voice_name,sizeof(new_voice_name),"default");
+	char* new_path = NULL;
+	wchar_t *voicename = NULL;
+	wchar_t *path = NULL;
+
+	HRESULT value_result = pToken->GetStringValue(L"VoiceName",&voicename);
+	if(SUCCEEDED(value_result))
 	{
-		wchar_t *voicename = NULL;
-		wchar_t *path = NULL;
-		HRESULT hr2;
-		int len;
-
-		hr2 = m_cpToken->GetStringValue( L"VoiceName", &voicename);
-		if( SUCCEEDED(hr2) )
+		if(!WcharToChar(new_voice_name,voicename,(int)sizeof(new_voice_name)))
 		{
-			WcharToChar(voice_name,voicename,sizeof(voice_name));
 			CoTaskMemFree(voicename);
+			return E_INVALIDARG;
 		}
-
-
-		hr2 = m_cpToken->GetStringValue( L"Path", &path);
-		if( SUCCEEDED(hr2) )
-		{
-			len = WideCharToMultiByte(CP_ACP, 0, path, -1, NULL, 0, NULL, NULL);
-			if(len > 0)
-			{
-				free(path_install);
-				path_install = (char *)malloc(len);
-				if(path_install != NULL)
-					WcharToChar(path_install,path,len);
-			}
-			CoTaskMemFree(path);
-		}
+		CoTaskMemFree(voicename);
 	}
 
+	value_result = pToken->GetStringValue(L"Path",&path);
+	if(SUCCEEDED(value_result))
+	{
+		const int path_length = WideCharToMultiByte(CP_ACP,0,path,-1,NULL,0,NULL,NULL);
+		if(path_length <= 0)
+		{
+			CoTaskMemFree(path);
+			return E_INVALIDARG;
+		}
+		new_path = (char*)malloc((size_t)path_length);
+		if(new_path == NULL)
+		{
+			CoTaskMemFree(path);
+			return E_OUTOFMEMORY;
+		}
+		if(!WcharToChar(new_path,path,path_length))
+		{
+			free(new_path);
+			CoTaskMemFree(path);
+			return E_INVALIDARG;
+		}
+		CoTaskMemFree(path);
+	}
+
+	const char* initialization_path = (new_path != NULL) ? new_path : path_install;
+	if(initialised==0)
+	{
+		const int initialized_sample_rate =
+			espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS,100,initialization_path,1);
+		if(initialized_sample_rate <= 0)
+		{
+			free(new_path);
+			return E_FAIL;
+		}
+		srate = initialized_sample_rate/50;
+		espeak_SetSynthCallback(SynthCallback);
+		initialised = 1;
+	}
+
+	if(espeak_SetVoiceByName(new_voice_name) != EE_OK)
+	{
+		free(new_path);
+		return E_INVALIDARG;
+	}
+
+	if(new_path != NULL)
+	{
+		free(path_install);
+		path_install = new_path;
+	}
+	strcpy_s(voice_name,sizeof(voice_name),new_voice_name);
+	strcpy_s(g_voice_name,sizeof(g_voice_name),new_voice_name);
+	pToken->AddRef();
+	m_cpToken = pToken;
+
+	master_volume = 100;
+	master_rate = 0;
 	gVolume = 100;
 	gSpeed = -1;
 	gPitch = -1;
 	gRange = -1;
 	gEmphasis = 0;
 	gSayas = 0;
-
-	if(initialised==0)
-	{
-		espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS,100,path_install,1);
-		espeak_SetSynthCallback(SynthCallback);
-		initialised = 1;
-//	    g_voice_name[0] = 0;
-	}
-
-	strcpy(g_voice_name, voice_name);
-	espeak_SetVoiceByName(g_voice_name);
-	
-	return hr;
+	return S_OK;
 } /* CTTSEngObj::SetObjectToken */
 
 //
@@ -478,196 +647,153 @@ static char *phoneme_names_en[] = {
 
 
 
-int CTTSEngObj::WritePhonemes(SPPHONEID *phons, wchar_t *pW)
-{//=========================================================
-	int ph;
-	int ix=2;
-	int skip=0;
-	int maxph = 49;
-	char *p;
-	int j;
-	int lang;
-	char **phoneme_names;
-	char phbuf[200];
+HRESULT CTTSEngObj::WritePhonemes(const SPPHONEID *phons, wchar_t *output,
+	size_t output_capacity, size_t *output_length)
+{//==============================================================
+	static const size_t max_phone_ids = 4096;
+	int maxph = 0;
+	int skip = 0;
+	size_t written = 0;
 	espeak_VOICE *voice;
 
+	if(output_length == NULL)
+		return E_POINTER;
+	*output_length = 0;
+	if(phons == NULL)
+		return E_INVALIDARG;
+
 	voice = espeak_GetCurrentVoice();
-	lang = (voice->languages[1] << 8) + (voice->languages[2]);
-
-	phoneme_names = phoneme_names_en;
-	maxph = 0;
-
+	if((voice == NULL) || (voice->languages == NULL))
+		return E_FAIL;
+	const int lang = ((unsigned char)voice->languages[1] << 8) +
+		(unsigned char)voice->languages[2];
 	if(lang == L('e','n'))
-	{
-		phoneme_names = phoneme_names_en;
 		maxph = 49;
-	}
-
 	if(maxph == 0)
-		return(0);
+		return S_OK;
 
-	strcpy(phbuf,"[[");
-	while(((ph = *phons++) != 0) && (ix < (sizeof(phbuf) - 3)))
+	#define APPEND_PHONE_CHAR(value) \
+		do { \
+			if((output != NULL) && (written >= output_capacity)) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER); \
+			if(output != NULL) output[written] = (wchar_t)(value); \
+			if(written == ~(size_t)0) return E_OUTOFMEMORY; \
+			written++; \
+		} while(0)
+
+	APPEND_PHONE_CHAR('[');
+	APPEND_PHONE_CHAR('[');
+	bool terminated = false;
+	for(size_t phone_index=0; phone_index<max_phone_ids; phone_index++)
 	{
+		const int ph = phons[phone_index];
+		if(ph == 0)
+		{
+			terminated = true;
+			break;
+		}
 		if(skip)
 		{
 			skip = 0;
 			continue;
 		}
-		if(ph > maxph)
+		if((ph < 0) || (ph > maxph))
 			continue;
 
-		p = phoneme_names[phons[0]];  // look at the phoneme after this one
-		if(p != NULL)
+		const int next_ph = (phone_index+1 < max_phone_ids) ? phons[phone_index+1] : 0;
+		const char* next_name = ((next_ph >= 0) && (next_ph <= maxph))
+			? phoneme_names_en[next_ph] : NULL;
+		if(next_name != NULL)
 		{
-			if(p[0] == '\'')
+			if(next_name[0] == '\'')
 			{
-				phbuf[ix++] = '\'';  // primary stress, put before the vowel, not after
-				skip=1;
+				APPEND_PHONE_CHAR('\'');
+				skip = 1;
 			}
-			if(p[0] == ',')
+			else if(next_name[0] == ',')
 			{
-				phbuf[ix++] = ',';  // secondary stress
-				skip=1;
+				APPEND_PHONE_CHAR(',');
+				skip = 1;
 			}
 		}
 
-		p = phoneme_names[ph];  // look at this phoneme
-
-		if(p != NULL)
+		const char* name = phoneme_names_en[ph];
+		if(name != NULL)
 		{
-			strcpy(&phbuf[ix],p);
-			ix += static_cast<int>(strlen(p));
+			for(size_t name_index=0; name[name_index] != 0; name_index++)
+				APPEND_PHONE_CHAR((unsigned char)name[name_index]);
 		}
 	}
-	strcpy(&phbuf[ix],"]]");
-	ix += 2;
+	if(!terminated)
+		return E_INVALIDARG;
+	APPEND_PHONE_CHAR(']');
+	APPEND_PHONE_CHAR(']');
+	#undef APPEND_PHONE_CHAR
 
-	if(pW != NULL)
-	{
-		for(j=0; j<=ix; j++)
-		{
-			pW[j] = phbuf[j];
-		}
-	}
-	return(static_cast<int>(strlen(phbuf)));
+	*output_length = written;
+	return S_OK;
 }
 
 
-
-int CTTSEngObj::ProcessFragList(const SPVTEXTFRAG* pTextFragList, wchar_t *pW_start, ISpTTSEngineSite* pOutputSite, int *n_text)
-{//============================================================================================================================
-
-	int action;
-	int control;
-	wchar_t *pW;
-	const SPVSTATE *state;
-	unsigned int ix;
-	unsigned int len;
-	unsigned int total=0;
-	char cmdbuf[50];
-	wchar_t markbuf[32];
-
-	int speed;
-	int volume;
-	int pitch;
-	int range;
-	int emphasis;
-	int sayas;
-
-	unsigned int text_offset = 0;
-
-	frag_count = 0;
-	frag_ix = 0;
-	pW = pW_start;
-
-	// check that the current voice is correct for this request
-	if(strcmp(voice_name, g_voice_name) != 0)
+HRESULT CTTSEngObj::ProcessFragList(const SPVTEXTFRAG* pTextFragList,
+	wchar_t *output, size_t output_capacity, ISpTTSEngineSite* pOutputSite,
+	size_t *output_length, size_t *text_fragment_count)
+{//==========================================================================
+	static const size_t command_buffer_size = 50;
+	static const size_t bookmark_measurement_size = 16;
+	const SPVTEXTFRAG* slow = pTextFragList;
+	const SPVTEXTFRAG* fast = pTextFragList;
+	while((fast != NULL) && (fast->pNext != NULL))
 	{
-		strcpy(g_voice_name, voice_name);
-		espeak_SetVoiceByName(g_voice_name);
+		slow = slow->pNext;
+		fast = fast->pNext->pNext;
+		if(slow == fast)
+			return E_INVALIDARG;
 	}
 
+	if((pOutputSite == NULL) || (output_length == NULL) || (text_fragment_count == NULL))
+		return E_POINTER;
+	if((output != NULL) && (output_capacity == 0))
+		return E_INVALIDARG;
+	*output_length = 0;
+	*text_fragment_count = 0;
+	frag_count = 0;
+	frag_ix = 0;
+
+	size_t total = 0;
+	size_t text_count = 0;
 	while(pTextFragList != NULL)
 	{
-		action = pTextFragList->State.eAction;
-		control = pOutputSite->GetActions();
-		len = pTextFragList->ulTextLen;
-
-
-		if(control & SPVES_ABORT)
+		const int action = pTextFragList->State.eAction;
+		if(pOutputSite->GetActions() & SPVES_ABORT)
 			break;
+		if((pTextFragList->ulTextLen > 0) && (pTextFragList->pTextStart == NULL))
+			return E_INVALIDARG;
 
 		CheckActions(pOutputSite);
-		sayas = 0;
-		state = &pTextFragList->State;
+		const SPVSTATE *state = &pTextFragList->State;
+		char cmdbuf[command_buffer_size] = {};
+		size_t command_length = 0;
+		size_t fragment_length = 0;
+		size_t new_total = 0;
 
 		switch(action)
 		{
 		case SPVA_SpellOut:
-			sayas = 0x12;   // SAYAS_CHARS;  // drop through to SPVA_Speak
 		case SPVA_Speak:
-			text_offset = pTextFragList->ulTextSrcOffset;
-			audio_offset = audio_latest;
+		{
+			const int sayas = (action == SPVA_SpellOut) ? 0x12 : 0;
+			const int volume = (state->Volume * master_volume)/100;
+			const int speed = ConvertRate(state->RateAdj);
+			const int pitch = ConvertPitch(state->PitchAdj.MiddleAdj);
+			const int range = ConvertRange(state->PitchAdj.RangeAdj);
+			const int emphasis = (state->EmphAdj != 0) ? 3 : 0;
 
-#ifdef deleted
-// attempt to recognise when JAWS is spelling, it doesn't use SPVA_SpellOut
-			if((pW != NULL) && (*n_text == 1) && ((len == 1) || ((len==2) && (pTextFragList->pTextStart[1]==' '))))
-			{
-				// A single text fragment with one character. Speak as a character, not a word
-				sayas = 0x11;
-				gSayas = 0;
-			}
-#endif
-
-			if(frag_count >= n_frag_offsets)
-			{
-				if((frag_offsets = (FRAG_OFFSET *)realloc(frag_offsets,sizeof(FRAG_OFFSET)*(frag_count+500))) != NULL)
-				{
-					n_frag_offsets = frag_count+500;
-				}
-			}
-
-			// first set the volume, rate, pitch
-			volume = (state->Volume * master_volume)/100;
-			speed = ConvertRate(state->RateAdj);
-			pitch = ConvertPitch(state->PitchAdj.MiddleAdj);
-			range = ConvertRange(state->PitchAdj.RangeAdj);
-			emphasis = state->EmphAdj;
-			if(emphasis != 0)
-				emphasis = 3;
-
-			len = 0;
-			if(volume != gVolume)
-			{
-				sprintf(&cmdbuf[len],"%c%dA",CTRL_EMBEDDED,volume);
-				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
-			}
-			if(speed != gSpeed)
-			{
-				sprintf(&cmdbuf[len],"%c%dS",CTRL_EMBEDDED,speed);
-				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
-			}
-			if(pitch != gPitch)
-			{
-				sprintf(&cmdbuf[len],"%c%dP",CTRL_EMBEDDED,pitch);
-				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
-			}
-			if(range != gRange)
-			{
-				sprintf(&cmdbuf[len],"%c%dR",CTRL_EMBEDDED,range);
-				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
-			}
-			if(emphasis != gEmphasis)
-			{
-				sprintf(&cmdbuf[len],"%c%dF",CTRL_EMBEDDED,emphasis);
-				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
-			}
-			if(sayas != gSayas)
-			{
-				sprintf(&cmdbuf[len],"%c%dY",CTRL_EMBEDDED,sayas);
-				len += static_cast<unsigned int>(strlen(&cmdbuf[len]));
-			}
+			if((volume != gVolume) && !AppendEmbeddedCommand(cmdbuf,sizeof(cmdbuf),&command_length,volume,'A')) return E_UNEXPECTED;
+			if((speed != gSpeed) && !AppendEmbeddedCommand(cmdbuf,sizeof(cmdbuf),&command_length,speed,'S')) return E_UNEXPECTED;
+			if((pitch != gPitch) && !AppendEmbeddedCommand(cmdbuf,sizeof(cmdbuf),&command_length,pitch,'P')) return E_UNEXPECTED;
+			if((range != gRange) && !AppendEmbeddedCommand(cmdbuf,sizeof(cmdbuf),&command_length,range,'R')) return E_UNEXPECTED;
+			if((emphasis != gEmphasis) && !AppendEmbeddedCommand(cmdbuf,sizeof(cmdbuf),&command_length,emphasis,'F')) return E_UNEXPECTED;
+			if((sayas != gSayas) && !AppendEmbeddedCommand(cmdbuf,sizeof(cmdbuf),&command_length,sayas,'Y')) return E_UNEXPECTED;
 
 			gVolume = volume;
 			gSpeed = speed;
@@ -676,104 +802,99 @@ int CTTSEngObj::ProcessFragList(const SPVTEXTFRAG* pTextFragList, wchar_t *pW_st
 			gEmphasis = emphasis;
 			gSayas = sayas;
 
-			total += (len + pTextFragList->ulTextLen);
-			if(pTextFragList->ulTextLen > 0)
+			const size_t measured_commands = (output == NULL)
+				? command_buffer_size-1 : command_length;
+			if(!CheckedAddSize(measured_commands,(size_t)pTextFragList->ulTextLen,&fragment_length) ||
+				((pTextFragList->ulTextLen > 0) && !CheckedAddSize(fragment_length,1u,&fragment_length)) ||
+				!CheckedAddSize(total,fragment_length,&new_total))
+				return E_OUTOFMEMORY;
+			if((output != NULL) && (new_total >= output_capacity))
+				return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+
+			if(output != NULL)
 			{
-				total++;
-			}
-
-			if(pW != NULL)
-			{
-				for(ix=0; ix<len; ix++)
-				{
-					*pW++ = cmdbuf[ix];
-				}
-
-				frag_offsets[frag_count].textix = text_offset;
-				frag_offsets[frag_count].bufix = static_cast<unsigned int>(pW - pW_start);
-				frag_offsets[frag_count].cmdlen = len;
-
-#ifdef TEST_INPUT
-{
-FILE *f;
-unsigned int c;
-int n;
-char buf[10];
-
-f = fopen("C:\\espeak_text_log.txt","a");
-if(f != NULL)
-{
-	fprintf(f,"----------\n");
-	for(ix=0; ix<pTextFragList->ulTextLen; ix++)
-	{
-		c = pTextFragList->pTextStart[ix];
-		n = utf8_out(c,buf);
-		buf[n] = 0;
-		fprintf(f,"%s",buf);
-	}
-	fprintf(f,"\n");
-	fclose(f);
-}
-}
-#endif
-				for(ix=0; ix<pTextFragList->ulTextLen; ix++)
-				{
-					
-					*pW++ = pTextFragList->pTextStart[ix];
-				}
+				if(!EnsureFragOffsetCapacity(text_count+1u))
+					return E_OUTOFMEMORY;
+				for(size_t index=0; index<command_length; index++)
+					output[total+index] = (unsigned char)cmdbuf[index];
+				frag_offsets[text_count].textix = (size_t)pTextFragList->ulTextSrcOffset;
+				frag_offsets[text_count].bufix = total+command_length;
+				frag_offsets[text_count].cmdlen = command_length;
 				if(pTextFragList->ulTextLen > 0)
 				{
-					*pW++ = ' ';
+					size_t text_bytes;
+					if(!CheckedMultiplySize((size_t)pTextFragList->ulTextLen,sizeof(wchar_t),&text_bytes))
+						return E_OUTOFMEMORY;
+					memcpy(&output[total+command_length],pTextFragList->pTextStart,text_bytes);
+					output[new_total-1] = L' ';
 				}
+				audio_offset = audio_latest;
 			}
-			frag_count++;
+			total = new_total;
+			text_count++;
 			break;
+		}
 
 		case SPVA_Bookmark:
-			total += (2 + pTextFragList->ulTextLen);
-
-			if(pW != NULL)
+			if(output == NULL)
 			{
-				int index;
-
-				for(ix=0; ix<pTextFragList->ulTextLen; ix++)
-				{
-					markbuf[ix] = (char )pTextFragList->pTextStart[ix];
-				}
-				markbuf[ix] = 0;
-
-				if((index = AddNameData((const char *)markbuf,1)) >= 0)
-				{
-					sprintf(cmdbuf,"%c%dM",CTRL_EMBEDDED,index);
-					len = static_cast<unsigned int>(strlen(cmdbuf));
-					for(ix=0; ix<len; ix++)
-					{
-						*pW++ = cmdbuf[ix];
-					}
-				}
+				if(!CheckedAddSize(total,bookmark_measurement_size,&total))
+					return E_OUTOFMEMORY;
+			}
+			else
+			{
+				size_t mark_characters;
+				size_t mark_bytes;
+				if(!CheckedAddSize((size_t)pTextFragList->ulTextLen,1u,&mark_characters) ||
+					!CheckedMultiplySize(mark_characters,sizeof(wchar_t),&mark_bytes))
+					return E_OUTOFMEMORY;
+				wchar_t* markbuf = (wchar_t*)malloc(mark_bytes);
+				if(markbuf == NULL)
+					return E_OUTOFMEMORY;
+				if(pTextFragList->ulTextLen > 0)
+					memcpy(markbuf,pTextFragList->pTextStart,mark_bytes-sizeof(wchar_t));
+				markbuf[pTextFragList->ulTextLen] = 0;
+				const int index = AddNameData((const char*)markbuf,1);
+				free(markbuf);
+				if((index >= 0) && !AppendEmbeddedCommand(cmdbuf,sizeof(cmdbuf),&command_length,index,'M'))
+					return E_UNEXPECTED;
+				if(!CheckedAddSize(total,command_length,&new_total))
+					return E_OUTOFMEMORY;
+				if(new_total >= output_capacity)
+					return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+				for(size_t command_index=0; command_index<command_length; command_index++)
+					output[total+command_index] = (unsigned char)cmdbuf[command_index];
+				total = new_total;
 			}
 			break;
 
 		case SPVA_Pronounce:
-			total += WritePhonemes(state->pPhoneIds, pW);
-			if(pW != NULL)
-			{
-				pW += total;
-			}
+		{
+			size_t phoneme_length = 0;
+			const size_t remaining = ((output != NULL) && (total < output_capacity))
+				? output_capacity-total-1u : 0;
+			HRESULT result = WritePhonemes(state->pPhoneIds,
+				(output != NULL) ? &output[total] : NULL,remaining,&phoneme_length);
+			if(FAILED(result))
+				return result;
+			if(!CheckedAddSize(total,phoneme_length,&new_total))
+				return E_OUTOFMEMORY;
+			if((output != NULL) && (new_total >= output_capacity))
+				return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+			total = new_total;
 			break;
 		}
-
+		}
 
 		pTextFragList = pTextFragList->pNext;
 	}
 
-	if(pW != NULL)
-	{
-		*pW = 0;
-	}
-	*n_text = frag_count;
-
-	return(total);
+	if(output != NULL)
+		output[total] = 0;
+	frag_count = (output != NULL) ? text_count : 0;
+	*text_fragment_count = text_count;
+	*output_length = total;
+	return S_OK;
 }   // end of ProcessFragList
 
 
@@ -820,87 +941,89 @@ STDMETHODIMP CTTSEngObj::Speak( DWORD dwSpeakFlags,
                                 const SPVTEXTFRAG* pTextFragList,
                                 ISpTTSEngineSite* pOutputSite )
 {
-    HRESULT hr = S_OK;
+	if((pOutputSite == NULL) || (pTextFragList == NULL))
+		return E_INVALIDARG;
 
-	unsigned int size;
-
-	int xVolume;
-	int xSpeed;
-	int xPitch;
-	int xRange;
-	int xEmphasis;
-	int xSayas;
-	int punctuation;
-	int n_text_frag=0;
-
-    //--- Check args
-    if( pOutputSite == NULL || pTextFragList == NULL )
-    {
-        hr = E_INVALIDARG;
-    }
-    else
-    {
-		InitNamedata();
-
-        //--- Init some vars
-        m_pCurrFrag   = pTextFragList;
-        m_pNextChar   = m_pCurrFrag->pTextStart;
-        m_pEndChar    = m_pNextChar + m_pCurrFrag->ulTextLen;
-        m_ullAudioOff = 0;
-
-		m_OutputSite = pOutputSite;
-		pOutputSite->GetEventInterest(&event_interest);
-
-		xVolume = gVolume;
-		xSpeed = gSpeed;
-		xPitch = gPitch;
-		xRange = gRange;
-		xEmphasis = gEmphasis;
-		xSayas = gSayas;
-
-		// find the size of the text buffer needed for this Speak() request
-		size = ProcessFragList(pTextFragList,NULL,pOutputSite,&n_text_frag);
-
-		gVolume = xVolume;
-		gSpeed = xSpeed;
-		gPitch = xPitch;
-		gRange = xRange;
-		gEmphasis = xEmphasis;
-		gSayas = xSayas;
-
-		punctuation = 0;
-		if(dwSpeakFlags & SPF_NLP_SPEAK_PUNC)
-			punctuation = 1;
-
-		espeak_SetParameter(espeakPUNCTUATION,punctuation,0);
-
-		size = (size + 50)*sizeof(wchar_t);
-
-		if(size > gBufSize)
-		{
-			size += 1000;  // some extra so we don't need to realloc() again too often
-			TextBuf = (wchar_t *)realloc(TextBuf,size);
-			if(TextBuf == NULL)
-			{
-				gBufSize=0;
-				return(1);
-			}
-			gBufSize = size;
-		}
-
-		audio_latest = 0;
-		prev_phoneme = 0;
-		prev_phoneme_time = 0;
-		prev_phoneme_position = 0;
-
-		size = ProcessFragList(pTextFragList,TextBuf,pOutputSite,&n_text_frag);
-
-		if(size > 0)
-		{
-			espeak_Synth(TextBuf,0,0,POS_CHARACTER,0,espeakCHARS_WCHAR | espeakKEEP_NAMEDATA | espeakPHONEMES,NULL,NULL);
-		}
+	SapiEngineGuard guard;
+	if((initialised == 0) || (m_cpToken == NULL))
+		return CO_E_NOTINITIALIZED;
+	if((pTextFragList->ulTextLen > 0) && (pTextFragList->pTextStart == NULL))
+		return E_INVALIDARG;
+	if(strcmp(voice_name,g_voice_name) != 0)
+	{
+		if(espeak_SetVoiceByName(voice_name) != EE_OK)
+			return E_INVALIDARG;
+		strcpy_s(g_voice_name,sizeof(g_voice_name),voice_name);
 	}
-    return hr;
+
+	InitNamedata();
+	m_pCurrFrag = pTextFragList;
+	m_pNextChar = m_pCurrFrag->pTextStart;
+	m_pEndChar = (m_pNextChar != NULL) ? m_pNextChar+m_pCurrFrag->ulTextLen : NULL;
+	m_ullAudioOff = 0;
+
+	HRESULT result = pOutputSite->GetEventInterest(&event_interest);
+	if(FAILED(result))
+		return result;
+
+	const int saved_volume = gVolume;
+	const int saved_speed = gSpeed;
+	const int saved_pitch = gPitch;
+	const int saved_range = gRange;
+	const int saved_emphasis = gEmphasis;
+	const int saved_sayas = gSayas;
+	size_t measured_characters = 0;
+	size_t measured_fragments = 0;
+	result = ProcessFragList(pTextFragList,NULL,0,pOutputSite,
+		&measured_characters,&measured_fragments);
+	gVolume = saved_volume;
+	gSpeed = saved_speed;
+	gPitch = saved_pitch;
+	gRange = saved_range;
+	gEmphasis = saved_emphasis;
+	gSayas = saved_sayas;
+	if(FAILED(result))
+		return result;
+
+	size_t required_characters;
+	size_t required_bytes;
+	if(!CheckedAddSize(measured_characters,1u,&required_characters) ||
+		!CheckedMultiplySize(required_characters,sizeof(wchar_t),&required_bytes))
+		return E_OUTOFMEMORY;
+	if(required_characters > gBufCapacity)
+	{
+		wchar_t* resized = (wchar_t*)realloc(TextBuf,required_bytes);
+		if(resized == NULL)
+			return E_OUTOFMEMORY;
+		TextBuf = resized;
+		gBufCapacity = required_characters;
+	}
+
+	const int punctuation = (dwSpeakFlags & SPF_NLP_SPEAK_PUNC) ? 1 : 0;
+	espeak_SetParameter(espeakPUNCTUATION,punctuation,0);
+	audio_offset = 0;
+	audio_latest = 0;
+	prev_phoneme = 0;
+	prev_phoneme_time = 0;
+	prev_phoneme_position = 0;
+
+	size_t text_characters = 0;
+	size_t text_fragments = 0;
+	result = ProcessFragList(pTextFragList,TextBuf,gBufCapacity,pOutputSite,
+		&text_characters,&text_fragments);
+	if(FAILED(result))
+		return result;
+	if((text_characters > measured_characters) || (text_fragments > measured_fragments))
+		return E_UNEXPECTED;
+
+	if(text_characters > 0)
+	{
+		SynthesisContext context(this,pOutputSite);
+		if(espeak_Synth(TextBuf,0,0,POS_CHARACTER,0,
+			espeakCHARS_WCHAR | espeakKEEP_NAMEDATA | espeakPHONEMES,NULL,NULL) != EE_OK)
+			return E_FAIL;
+	}
+	return S_OK;
 } /* CTTSEngObj::Speak */
 
 
@@ -909,6 +1032,8 @@ STDMETHODIMP CTTSEngObj::Speak( DWORD dwSpeakFlags,
 
 HRESULT CTTSEngObj::CheckActions( ISpTTSEngineSite* pOutputSite )
 {//==============================================================
+	if(pOutputSite == NULL)
+		return E_POINTER;
 	int control;
 	USHORT volume;
 	long rate;
@@ -940,6 +1065,8 @@ STDMETHODIMP CTTSEngObj::GetOutputFormat( const GUID * pTargetFormatId, const WA
 {//========================================================================
 	if(pDesiredFormatId == NULL || ppCoMemDesiredWaveFormatEx == NULL)
 		return E_POINTER;
+	SapiEngineGuard guard;
+	*ppCoMemDesiredWaveFormatEx = NULL;
 
 	DWORD sample_rate = 22050;
 
@@ -970,17 +1097,35 @@ STDMETHODIMP CTTSEngObj::GetOutputFormat( const GUID * pTargetFormatId, const WA
 
 extern "C" int CompileDictionary(const char *voice, const char *path_log)
 {//===========================================================
-	FILE *f_log3;
-	char fname[120];
+	SapiEngineGuard guard;
+	if((voice == NULL) || (path_log == NULL) || (path_install == NULL))
+		return(1);
 
-	f_log3 = fopen(path_log,"w");
-	sprintf(fname,"%s/",path_install);
-
-	espeak_SetVoiceByName(voice);
-	espeak_CompileDictionary(fname,f_log3,0);
+	FILE *f_log3 = fopen(path_log,"w");
+	if(f_log3 == NULL)
+		return(1);
+	size_t path_length;
+	if(!CheckedAddSize(strlen(path_install),2u,&path_length))
+	{
+		fclose(f_log3);
+		return(1);
+	}
+	char* fname = (char*)malloc(path_length);
+	if(fname == NULL)
+	{
+		fclose(f_log3);
+		return(1);
+	}
+	const int written = _snprintf_s(fname,path_length,_TRUNCATE,"%s/",path_install);
+	int result = 1;
+	if((written >= 0) && (espeak_SetVoiceByName(voice) == EE_OK))
+	{
+		espeak_CompileDictionary(fname,f_log3,0);
+		result = 0;
+	}
+	free(fname);
 	fclose(f_log3);
-
-	return(0);
+	return(result);
 }
 
 

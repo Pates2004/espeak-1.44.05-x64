@@ -13,6 +13,18 @@
 volatile LONG g_module_object_count = 0;
 static volatile LONG g_server_lock_count = 0;
 static HMODULE g_module = nullptr;
+static CRITICAL_SECTION g_sapi_engine_lock;
+static bool g_sapi_engine_lock_initialized = false;
+
+void LockSapiEngine()
+{
+    EnterCriticalSection(&g_sapi_engine_lock);
+}
+
+void UnlockSapiEngine()
+{
+    LeaveCriticalSection(&g_sapi_engine_lock);
+}
 
 namespace {
 
@@ -130,7 +142,14 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
 {
     if (reason == DLL_PROCESS_ATTACH) {
         g_module = instance;
+        if (!InitializeCriticalSectionEx(&g_sapi_engine_lock, 4000, 0))
+            return FALSE;
+        g_sapi_engine_lock_initialized = true;
         DisableThreadLibraryCalls(instance);
+    }
+    else if (reason == DLL_PROCESS_DETACH && g_sapi_engine_lock_initialized) {
+        DeleteCriticalSection(&g_sapi_engine_lock);
+        g_sapi_engine_lock_initialized = false;
     }
     return TRUE;
 }

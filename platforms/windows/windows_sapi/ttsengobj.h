@@ -12,6 +12,8 @@
 #include "TtsEng.h"
 
 extern volatile LONG g_module_object_count;
+void LockSapiEngine();
+void UnlockSapiEngine();
 
 class CTTSEngObj final : public ISpTTSEngine, public ISpObjectWithToken
 {
@@ -43,9 +45,11 @@ public:
                                WAVEFORMATEX** ppCoMemDesiredWaveFormatEx) override;
 
     HRESULT CheckActions(ISpTTSEngineSite* pOutputSite);
-    int ProcessFragList(const SPVTEXTFRAG* pTextFragList, wchar_t* pW,
-                        ISpTTSEngineSite* pOutputSite, int* n_text);
-    int WritePhonemes(SPPHONEID* phons, wchar_t* pW_start);
+    HRESULT ProcessFragList(const SPVTEXTFRAG* pTextFragList, wchar_t* output,
+                            size_t output_capacity, ISpTTSEngineSite* output_site,
+                            size_t* output_length, size_t* text_fragment_count);
+    HRESULT WritePhonemes(const SPPHONEID* phons, wchar_t* output,
+                          size_t output_capacity, size_t* output_length);
 
 private:
     HRESULT FinalConstruct();

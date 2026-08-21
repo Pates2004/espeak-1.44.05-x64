@@ -52,7 +52,6 @@
 
 
 
-extern void Write4Bytes(FILE *f, int value);
 char path_home[N_PATH_HOME];    // this is the espeak-data directory
 
 char filetype[5];
@@ -64,8 +63,23 @@ FILE *f_wave = NULL;
 int quiet = 0;
 uint64_t samples_total = 0;
 uint64_t samples_split = 0;
+uint64_t wave_data_bytes = 0;
 unsigned int wavefile_count = 0;
 int end_of_sentence = 0;
+int wave_file_error = 0;
+
+static const uint64_t MAX_WAVE_DATA_BYTES =
+	((static_cast<uint64_t>(UINT32_MAX) - 36u) & ~static_cast<uint64_t>(1u));
+
+static int WriteWaveUint32(FILE *file, uint32_t value)
+{
+	unsigned char bytes[4];
+	bytes[0] = static_cast<unsigned char>(value);
+	bytes[1] = static_cast<unsigned char>(value >> 8);
+	bytes[2] = static_cast<unsigned char>(value >> 16);
+	bytes[3] = static_cast<unsigned char>(value >> 24);
+	return(fwrite(bytes,1,sizeof(bytes),file) == sizeof(bytes));
+}
 
 static int ParseSplitMinutes(const char *text, uint64_t *minutes)
 {
@@ -250,7 +264,7 @@ static int OpenWaveFile(const char *path, int rate)
 		0x10,0,0,0,1,0,1,0,  9,0x3d,0,0,0x12,0x7a,0,0,
 		2,0,0x10,0,'d','a','t','a',  0x00,0xf0,0xff,0x7f};
 
-	if(path == NULL)
+	if((path == NULL) || (rate <= 0))
 		return(2);
 
 	if(strcmp(path,"stdout")==0)
@@ -260,10 +274,19 @@ static int OpenWaveFile(const char *path, int rate)
 
 	if(f_wave != NULL)
 	{
-		fwrite(wave_hdr,1,24,f_wave);
-		Write4Bytes(f_wave,rate);
-		Write4Bytes(f_wave,rate * 2);
-		fwrite(&wave_hdr[32],1,12,f_wave);
+		const int header_ok =
+			(fwrite(wave_hdr,1,24,f_wave) == 24) &&
+			WriteWaveUint32(f_wave,static_cast<uint32_t>(rate)) &&
+			WriteWaveUint32(f_wave,static_cast<uint32_t>(rate)*2u) &&
+			(fwrite(&wave_hdr[32],1,12,f_wave) == 12);
+		if(!header_ok)
+		{
+			if(f_wave != stdout)
+				fclose(f_wave);
+			f_wave = NULL;
+			return(1);
+		}
+		wave_data_bytes = 0;
 		return(0);
 	}
 	return(1);
@@ -272,27 +295,35 @@ static int OpenWaveFile(const char *path, int rate)
 
 
 
-static void CloseWaveFile()
+static int CloseWaveFile()
 //=========================
 {
-   unsigned int pos;
+	int result = wave_file_error;
+	if(f_wave == NULL)
+		return(result);
+	if(f_wave == stdout)
+	{
+		if(fflush(f_wave) != 0)
+			result = 1;
+		if(result)
+			wave_file_error = 1;
+		return(result);
+	}
 
-   if((f_wave == NULL) || (f_wave == stdout))
-      return;
-
-   fflush(f_wave);
-   pos = ftell(f_wave);
-
-	fseek(f_wave,4,SEEK_SET);
-	Write4Bytes(f_wave,pos - 8);
-
-	fseek(f_wave,40,SEEK_SET);
-	Write4Bytes(f_wave,pos - 44);
-
-
-   fclose(f_wave);
-   f_wave = NULL;
-
+	if((wave_data_bytes > MAX_WAVE_DATA_BYTES) || (fflush(f_wave) != 0) ||
+		(fseek(f_wave,4,SEEK_SET) != 0) ||
+		!WriteWaveUint32(f_wave,static_cast<uint32_t>(wave_data_bytes+36u)) ||
+		(fseek(f_wave,40,SEEK_SET) != 0) ||
+		!WriteWaveUint32(f_wave,static_cast<uint32_t>(wave_data_bytes)))
+	{
+		result = 1;
+	}
+	if(fclose(f_wave) != 0)
+		result = 1;
+	f_wave = NULL;
+	if(result)
+		wave_file_error = 1;
+	return(result);
 } // end of CloseWaveFile
 
 
@@ -319,12 +350,23 @@ static int WavegenFile(void)
 
 	if(quiet)
 		return(finished);
+	if(wave_file_error)
+		return(1);
 
 	if(f_wave == NULL)
 	{
-		sprintf(fname,"%s_%.2d%s",wavefile,++wavefile_count,filetype);
-		if(OpenWaveFile(fname, samplerate) != 0)
+		const int name_length = snprintf(fname,sizeof(fname),"%s_%.2u%s",
+			wavefile,++wavefile_count,filetype);
+		if((name_length < 0) || (static_cast<size_t>(name_length) >= sizeof(fname)))
+		{
+			wave_file_error = 1;
 			return(1);
+		}
+		if(OpenWaveFile(fname, samplerate) != 0)
+		{
+			wave_file_error = 1;
+			return(1);
+		}
 	}
 
 	if(end_of_sentence)
@@ -332,15 +374,45 @@ static int WavegenFile(void)
 		end_of_sentence = 0;
 		if((samples_split > 0 ) && (samples_total > samples_split))
 		{
-			CloseWaveFile();
+			if(CloseWaveFile() != 0)
+				return(1);
 			samples_total = 0;
+			const int name_length = snprintf(fname,sizeof(fname),"%s_%.2u%s",
+				wavefile,++wavefile_count,filetype);
+			if((name_length < 0) || (static_cast<size_t>(name_length) >= sizeof(fname)) ||
+				(OpenWaveFile(fname,samplerate) != 0))
+			{
+				wave_file_error = 1;
+				return(1);
+			}
 		}
 	}
 
 	if(f_wave != NULL)
 	{
-		samples_total += static_cast<int>((out_ptr - wav_outbuf)/2);
-		fwrite(wav_outbuf, 1, out_ptr - wav_outbuf, f_wave);
+		const size_t bytes_to_write = static_cast<size_t>(out_ptr-wav_outbuf);
+		const uint64_t samples_to_write = static_cast<uint64_t>(bytes_to_write/2u);
+		if((f_wave != stdout) && ((wave_data_bytes > MAX_WAVE_DATA_BYTES) ||
+			(static_cast<uint64_t>(bytes_to_write) > MAX_WAVE_DATA_BYTES-wave_data_bytes)))
+		{
+			fprintf(stderr,"WAV output reached the RIFF size limit; use --split\n");
+			wave_file_error = 1;
+			return(1);
+		}
+		if(samples_to_write > (~static_cast<uint64_t>(0))-samples_total)
+		{
+			wave_file_error = 1;
+			return(1);
+		}
+		if(fwrite(wav_outbuf,1,bytes_to_write,f_wave) != bytes_to_write)
+		{
+			fprintf(stderr,"Can't write WAV output\n");
+			wave_file_error = 1;
+			return(1);
+		}
+		samples_total += samples_to_write;
+		if(f_wave != stdout)
+			wave_data_bytes += static_cast<uint64_t>(bytes_to_write);
 	}
 	return(finished);
 }  // end of WavegenFile
@@ -877,6 +949,8 @@ int main (int argc, char **argv)
 		{
 			if(WavegenFile() != 0)
 			{
+				if(wave_file_error)
+					break;
 				if(ix == 0)
 					break;   // finished, wavegen command queue is empty
 			}
@@ -888,6 +962,8 @@ int main (int argc, char **argv)
 		}
 
 		CloseWaveFile();
+		if(wave_file_error)
+			return(4);
 	}
 	else
 	{
