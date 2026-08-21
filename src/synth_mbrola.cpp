@@ -119,7 +119,8 @@ espeak_ERROR LoadMbrolaTable(const char *mbrola_voice, const char *phtrans, int 
 	int ix;
 	int *pw;
 	FILE *f_in;
-	char path[sizeof(path_home)+15];
+	MBROLA_TAB *new_mbrola_tab;
+	char path[sizeof(path_home)+80];
 
 	mbrola_name[0] = 0;
 	mbrola_delay = 0;
@@ -131,17 +132,17 @@ espeak_ERROR LoadMbrolaTable(const char *mbrola_voice, const char *phtrans, int 
 		return(EE_OK);
 	}
 
-	sprintf(path,"%s/mbrola/%s",path_home,mbrola_voice);
+	snprintf(path,sizeof(path),"%s/mbrola/%s",path_home,mbrola_voice);
 #ifdef PLATFORM_POSIX
 	if(GetFileLength(path) <= 0)
 	{
 		// mbrola voice file not found, look in /usr/share
-     sprintf(path,"/usr/share/mbrola/%s",mbrola_voice);
+     snprintf(path,sizeof(path),"/usr/share/mbrola/%s",mbrola_voice);
 	}
 	if(GetFileLength(path) <= 0)
 	{
 		// mbrola voice file not found, look in /usr/share
-     sprintf(path,"/usr/share/mbrola/voices/%s",mbrola_voice);
+     snprintf(path,sizeof(path),"/usr/share/mbrola/voices/%s",mbrola_voice);
 	}
 #endif
 #ifdef PLATFORM_WINDOWS
@@ -155,19 +156,26 @@ espeak_ERROR LoadMbrolaTable(const char *mbrola_voice, const char *phtrans, int 
 	setNoError_MBR(1);     // don't stop on phoneme errors
 
 	// read eSpeak's mbrola phoneme translation data, eg. en1_phtrans
-	sprintf(path,"%s/mbrola_ph/%s",path_home,phtrans);
+	snprintf(path,sizeof(path),"%s/mbrola_ph/%s",path_home,phtrans);
 	size = GetFileLength(path);
+	if(size < 4)
+	{
+		close_MBR();
+		return(EE_NOT_FOUND);
+	}
 	if((f_in = fopen(path,"rb")) == NULL) {
 		close_MBR();	
 		return(EE_NOT_FOUND);
 	}
 
-	if((mbrola_tab = (MBROLA_TAB *)realloc(mbrola_tab,size)) == NULL)
+	new_mbrola_tab = (MBROLA_TAB *)realloc(mbrola_tab,size);
+	if(new_mbrola_tab == NULL)
 	{
 		fclose(f_in);
 		close_MBR();	
 		return(EE_INTERNAL_ERROR);
 	}
+	mbrola_tab = new_mbrola_tab;
 
 	mbrola_control = Read4Bytes(f_in);
 	pw = (int *)mbrola_tab;

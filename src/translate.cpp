@@ -358,12 +358,17 @@ static unsigned char *length_mod_tabs[6] = {
 
 void SetLengthMods(Translator *tr, int value)
 {//==========================================
+	int table_ix;
 	int value2;
 
-	tr->langopts.length_mods0 = tr->langopts.length_mods = length_mod_tabs[value % 100];
+	table_ix = value % 100;
+	if((table_ix < 0) || (table_ix >= static_cast<int>(sizeof(length_mod_tabs)/sizeof(length_mod_tabs[0]))))
+		table_ix = 0;
+	tr->langopts.length_mods0 = tr->langopts.length_mods = length_mod_tabs[table_ix];
 	if((value2 = value / 100) != 0)
 	{
-		tr->langopts.length_mods0 = length_mod_tabs[value2];
+		if((value2 > 0) && (value2 < static_cast<int>(sizeof(length_mod_tabs)/sizeof(length_mod_tabs[0]))))
+			tr->langopts.length_mods0 = length_mod_tabs[value2];
 	}
 }
 
@@ -870,7 +875,7 @@ int TranslateWord(Translator *tr, char *word1, int next_pause, WORD_TAB *wtab)
 			found = LookupDictList(tr, &word1, phonemes, dictionary_flags, FLAG_ALLOW_TEXTMODE, wtab);   // the original word
 
 
-		if((dictionary_flags[0] & (FLAG_ALLOW_DOT || FLAG_NEEDS_DOT)) && (wordx[1] == '.'))
+		if((dictionary_flags[0] & (FLAG_ALLOW_DOT | FLAG_NEEDS_DOT)) && (wordx[1] == '.'))
 		{
 			wordx[1] = ' ';   // remove a Dot after this word
 		}
@@ -952,7 +957,7 @@ if((wmark > 0) && (wmark < 8))
 			found = TranslateNumber(tr, word1, phonemes, dictionary_flags, wtab, 0);
 		}
 
-		if(!found & ((wflags & FLAG_UPPERS) != FLAG_FIRST_UPPER))
+		if(!found && ((wflags & FLAG_UPPERS) != FLAG_FIRST_UPPER))
 		{
 			// either all upper or all lower case
 
@@ -2066,7 +2071,7 @@ static int TranslateWord2(Translator *tr, char *word, WORD_TAB *wtab, int pre_pa
 		ph_list2[n_ph_list2++].synthflags = SFLAG_EMBEDDED;
 	}
 
-	if(flags & FLAG_STRESS_END2)
+	if((flags & FLAG_STRESS_END2) && (max_stress_ix >= 0) && (max_stress_ix < N_PHONEME_LIST))
 	{
 		// this's word's stress could be increased later
 		ph_list2[max_stress_ix].synthflags |= SFLAG_PROMOTE_STRESS;
@@ -2348,7 +2353,7 @@ void *TranslateClause(Translator *tr, FILE *f_text, const void *vp_input, int *t
 	static char voice_change_name[40];
 	int word_count=0;      // index into words
 
-	char sbuf[N_TR_SOURCE];
+	char sbuf[N_TR_SOURCE*2];  // allow for spaces inserted while normalizing a clause
 
 	int terminator;
 	int tone;
@@ -2467,7 +2472,7 @@ p = source;
 	}
 	words[0].length = k;
 
-	while(!finished && (ix < (int)sizeof(sbuf))&& (n_ph_list2 < N_PHONEME_LIST-4))
+	while(!finished && (ix < ((int)sizeof(sbuf) - 5)) && (n_ph_list2 < N_PHONEME_LIST-4))
 	{
 		prev_out2 = prev_out;
 		utf8_in2(&prev_out,&sbuf[ix-1],1);   // prev_out = sbuf[ix-1];
@@ -2508,6 +2513,15 @@ p = source;
 		{
 			finished = 1;
 			c = ' ';
+		}
+		else
+		if(!IsSpace(c) && ((ix - words[word_count].start) >= (N_WORD_BYTES - 4)))
+		{
+			// The dictionary and rule translators use N_WORD_BYTES-sized
+			// buffers. Split pathological unbroken input before it reaches
+			// those fixed-size buffers, then process this character again.
+			c = ' ';
+			space_inserted = 1;
 		}
 
 		if((c == CTRL_EMBEDDED) || (c == ctrl_embedded))

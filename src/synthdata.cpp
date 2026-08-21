@@ -463,6 +463,7 @@ void LoadConfig(void)
 	int ix;
 	char c1;
 	char *p;
+	size_t string_length;
 	char string[200];
 
 	logging_type = 0;
@@ -485,8 +486,11 @@ void LoadConfig(void)
 
 		if(memcmp(buf,"log",3)==0)
 		{
-			if(sscanf(&buf[4],"%d %s",&logging_type,string)==2)
+			if(sscanf(&buf[4],"%d %199s",&logging_type,string)==2)
+			{
+				string[sizeof(string)-1] = 0;
 				f_logespeak = fopen(string,"w");
+			}
 		}
 		else
 		if(memcmp(buf,"tone",4)==0)
@@ -496,17 +500,20 @@ void LoadConfig(void)
 		else
 		if(memcmp(buf,"pa_device",9)==0)
 		{
-			sscanf(&buf[7],"%d",&option_device_number);
+			if(sscanf(&buf[10],"%d",&option_device_number) != 1)
+				option_device_number = -1;
 		}
 		else
 		if(memcmp(buf,"soundicon",9)==0)
 		{
-			ix = sscanf(&buf[10],"_%c %s",&c1,string);
-			if(ix==2)
+			ix = sscanf(&buf[10],"_%c %199s",&c1,string);
+			if((ix==2) && (n_soundicon_tab < N_SOUNDICON_TAB))
 			{
 				soundicon_tab[n_soundicon_tab].name = c1;
-				p = Alloc(static_cast<int>(strlen(string))+1);
-				strcpy(p,string);
+				string[sizeof(string)-1] = 0;
+				string_length = strlen(string);
+				p = Alloc(static_cast<int>(string_length)+1);
+				memcpy(p,string,string_length+1);
 				soundicon_tab[n_soundicon_tab].filename = p;
 				soundicon_tab[n_soundicon_tab++].length = 0;
 			}

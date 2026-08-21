@@ -419,12 +419,16 @@ void LookupAccentedLetter(Translator *tr, unsigned int letter, char *ph_buf)
 	int accent1 = 0;
 	int accent2 = 0;
 	int basic_letter;
+	int table_ix;
 	int letter2=0;
+	const int n_accents = sizeof(accents_tab) / sizeof(accents_tab[0]);
+	const int n_non_ascii = sizeof(non_ascii_tab) / sizeof(non_ascii_tab[0]);
 	char ph_letter1[30];
 	char ph_letter2[30];
 	char ph_accent1[30];
 	char ph_accent2[30];
 
+	ph_buf[0] = 0;
 	ph_accent2[0] = 0;
 
 	if((letter >= 0xe0) && (letter < 0x17f))
@@ -441,7 +445,12 @@ void LookupAccentedLetter(Translator *tr, unsigned int letter, char *ph_buf)
 	{
 		basic_letter = (accent_data & 0x3f) + 59;
 		if(basic_letter < 'a')
-			basic_letter = non_ascii_tab[basic_letter-59];
+		{
+			table_ix = basic_letter-59;
+			if((table_ix < 0) || (table_ix >= n_non_ascii))
+				return;
+			basic_letter = non_ascii_tab[table_ix];
+		}
 
 		if(accent_data & 0x8000)
 		{
@@ -454,6 +463,9 @@ void LookupAccentedLetter(Translator *tr, unsigned int letter, char *ph_buf)
 			accent1 = (accent_data >> 6) & 0x1f;
 			accent2 = (accent_data >> 11) & 0xf;
 		}
+		if((accent1 < 0) || (accent1 >= n_accents) ||
+			(accent2 < 0) || (accent2 >= n_accents))
+			return;
 
 
 		if(Lookup(tr, accents_tab[accent1].name, ph_accent1) != 0)
@@ -1003,7 +1015,7 @@ static int LookupThousands(Translator *tr, int value, int thousandplex, int thou
 				sprintf(string,"_%dM%do",value,thousandplex);
 				found_value = Lookup(tr, string, ph_thousands);
 			}
-			if(!found_value & (number_control & 1))
+			if(!found_value && (number_control & 1))
 			{
 				// look for the 'e' variant
 				sprintf(string,"_%dM%de",value,thousandplex);

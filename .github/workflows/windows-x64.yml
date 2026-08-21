@@ -65,6 +65,18 @@ jobs:
             }
           }
 
+      - name: Test installer end to end
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\test-installer-x64.ps1 -Installer .\build\installer\setup_espeak-1.44.05-x64.exe
+
+      - name: Test with AddressSanitizer
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\test-asan-x64.ps1
+
+      - name: Run MSVC Code Analysis
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\test-code-analysis-x64.ps1
+
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:

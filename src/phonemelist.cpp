@@ -106,6 +106,9 @@ static int SubstitutePhonemes(Translator *tr, PHONEME_LIST *plist_out)
 
 
 
+#ifdef _MSC_VER
+#pragma warning(suppress: 6262)  // bounded 32 KB clause workspace; no recursion
+#endif
 void MakePhonemeList(Translator *tr, int post_pause, int start_sentence)
 {//=====================================================================
 
@@ -631,5 +634,4 @@ void MakePhonemeList(Translator *tr, int post_pause, int start_sentence)
 
 	n_phoneme_list = ix;
 }  // end of MakePhonemeList
-
 

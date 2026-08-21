@@ -849,6 +849,7 @@ static int compile_dictlist_file(const char *path, const char* filename)
 	char *p;
 	int  count=0;
 	FILE *f_in;
+	FILE *log = (f_log != NULL) ? f_log : stderr;
 	char buf[200];
 	char fname[sizeof(path_home)+45];
 	char dict_line[128];
@@ -864,7 +865,7 @@ static int compile_dictlist_file(const char *path, const char* filename)
 			return(-1);
 	}
 
-	fprintf(f_log,"Compiling: '%s'\n",fname);
+	fprintf(log,"Compiling: '%s'\n",fname);
 
 	linenum=0;
 	
@@ -894,7 +895,7 @@ static int compile_dictlist_file(const char *path, const char* filename)
 		count++;
 	}
 	
-	fprintf(f_log,"\t%d entries\n",count);
+	fprintf(log,"\t%d entries\n",count);
 	fclose(f_in);
 	return(0);
 }   /* end of compile_dictlist_file */
@@ -1605,6 +1606,9 @@ static int compile_lettergroup(char *input, FILE *f_out)
 }
 
 
+#ifdef _MSC_VER
+#pragma warning(suppress: 6262)  // bounded 23 KB build-time workspace; no recursion
+#endif
 static int compile_dictrules(FILE *f_in, FILE *f_out, char *fname_temp)
 {//====================================================================
 	char *prule;

@@ -248,8 +248,12 @@ PaError Pa_OpenDefaultStream(
     if (sample_rate < 1000 || sample_rate > 192000) return paInvalidSampleRate;
     if (frames_per_buffer == 0) frames_per_buffer = 512;
 
+#pragma warning(suppress: 28182)  // allocation is checked before the first dereference
     WinMmStream* stream = new (std::nothrow) WinMmStream{};
     if (stream == nullptr) return paInsufficientMemory;
+#ifdef _MSC_VER
+    __analysis_assume(stream != nullptr);
+#endif
 
     stream->callback = callback;
     stream->user_data = user_data;

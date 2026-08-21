@@ -700,6 +700,7 @@ static int LoadSoundFile(const char *fname, int index)
 	int  length;
 	char fname_temp[100];
 	char fname2[sizeof(path_home)+13+40];
+	fname_temp[0] = 0;
 
 	if(fname == NULL)
 	{
@@ -768,19 +769,32 @@ static int LoadSoundFile(const char *fname, int index)
 	}
 
 	length = GetFileLength(fname);
+	if(length < 44)
+	{
+		fclose(f);
+		if(fname_temp[0] != 0)
+			remove(fname_temp);
+		return(4);
+	}
 	fseek(f,0,SEEK_SET);
 	if((p = (char *)realloc(soundicon_tab[index].data, length)) == NULL)
 	{
 		fclose(f);
 		return(4);
 	}
+	soundicon_tab[index].data = p;
 	length = static_cast<int>(fread(p,1,length,f));
 	fclose(f);
-	remove(fname_temp);
+	if(fname_temp[0] != 0)
+		remove(fname_temp);
+	if(length < 44)
+	{
+		soundicon_tab[index].length = 0;
+		return(4);
+	}
 
 	ip = (int *)(&p[40]);
 	soundicon_tab[index].length = (*ip) / 2;  // length in samples
-	soundicon_tab[index].data = p;
 	return(0);
 }  //  end of LoadSoundFile
 
@@ -812,6 +826,7 @@ static int LoadSoundFile2(const char *fname)
 // (if it'snot already loaded)
 
 	int ix;
+	char *filename;
 	static int slot = -1;
 
 	for(ix=0; ix<n_soundicon_tab; ix++)
@@ -825,11 +840,17 @@ static int LoadSoundFile2(const char *fname)
 	if(slot >= N_SOUNDICON_SLOTS)
 		slot = 0;
 
-	if(LoadSoundFile(fname, slot) != 0)
+	filename = (char *)malloc(strlen(fname)+1);
+	if(filename == NULL)
 		return(-1);
-
-	soundicon_tab[slot].filename = (char *)realloc(soundicon_tab[ix].filename, strlen(fname)+1);
-	strcpy(soundicon_tab[slot].filename, fname);
+	strcpy(filename, fname);
+	if(LoadSoundFile(fname, slot) != 0)
+	{
+		free(filename);
+		return(-1);
+	}
+	free(soundicon_tab[slot].filename);
+	soundicon_tab[slot].filename = filename;
 	return(slot);
 }
 

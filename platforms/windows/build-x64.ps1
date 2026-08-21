@@ -55,6 +55,7 @@ if ($LASTEXITCODE -ne 0) {
 
 if (-not $SkipTests) {
     & (Join-Path $PSScriptRoot 'test-polish-numbers.ps1') -EspeakExe $espeakExe -DataPath $projectRoot
+    & (Join-Path $PSScriptRoot 'test-long-input.ps1') -EspeakExe $espeakExe -DataPath $projectRoot
 
     $wavPath = Join-Path $releaseDir 'smoke-pl.wav'
     & $espeakExe --path=$projectRoot -v pl -w $wavPath '64-bit synthesis test.'

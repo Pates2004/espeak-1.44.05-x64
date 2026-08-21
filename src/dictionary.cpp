@@ -1104,6 +1104,9 @@ void SetWordStress(Translator *tr, char *output, unsigned int *dictionary_flags,
 
 	static char consonant_types[16] = {0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0};
 
+	memset(vowel_stress, 0, sizeof(vowel_stress));
+	memset(syllable_weight, 0, sizeof(syllable_weight));
+	memset(vowel_length, 0, sizeof(vowel_length));
 
 	/* stress numbers  STRESS_BASE +
 		0  diminished, unstressed within a word
@@ -1129,7 +1132,7 @@ void SetWordStress(Translator *tr, char *output, unsigned int *dictionary_flags,
 	}
 	if(ix == 0) return;
 	final_ph = phonetic[ix-1];
-	final_ph2 =  phonetic[ix-2];
+	final_ph2 = (ix > 1) ? phonetic[ix-2] : 0;
 
 	max_output = output + (N_WORD_PHONEMES-3);   /* check for overrun */
 
@@ -3067,7 +3070,7 @@ static const char *LookupDict2(Translator *tr, const char *word, const char *wor
 			continue;
 		}
 
-		if((dictionary_flags & FLAG_ATSTART) && !(wtab->flags & FLAG_FIRST_WORD))
+		if((dictionary_flags & FLAG_ATSTART) && ((wtab == NULL) || !(wtab->flags & FLAG_FIRST_WORD)))
 		{
 			// only use this pronunciation if it's the first word of a clause
 			continue;
@@ -3193,6 +3196,7 @@ int LookupDictList(Translator *tr, char **wordptr, char *ph_out, unsigned int *f
 	unsigned char c;
 	int  nbytes;
 	int  len;
+	int  word_too_long = 0;
 	char word[N_WORD_BYTES];
 	static char word_replacement[N_WORD_BYTES];
 
@@ -3203,36 +3207,58 @@ int LookupDictList(Translator *tr, char **wordptr, char *ph_out, unsigned int *f
 	{
 		// look for an abbreviation of the form a.b.c
 		// try removing the spaces between the dots and looking for a match
+		if((length + nbytes + 1) >= (N_WORD_BYTES - 1))
+		{
+			word_too_long = 1;
+			break;
+		}
 		memcpy(&word[length],word2,nbytes);
 		length += nbytes;
 		word[length++] = '.';
 		word2 += nbytes+3;
 	}
-	if(length > 0)
+	if((length > 0) && !word_too_long)
 	{
 		// found an abbreviation containing dots
 		nbytes = 0;
 		while(((c = word2[nbytes]) != 0) && (c != ' '))
 		{
+			if((length + nbytes) >= (N_WORD_BYTES - 1))
+			{
+				word_too_long = 1;
+				break;
+			}
 			nbytes++;
 		}
-		memcpy(&word[length],word2,nbytes);
-		word[length+nbytes] = 0;
-		found =  LookupDict2(tr, word, word2, ph_out, flags, end_flags, wtab);
-		if(found)
+		if(!word_too_long)
 		{
-			// set the skip words flag
-			flags[0] |= FLAG_SKIPWORDS;
-			dictionary_skipwords = length;
-			return(1);
+			memcpy(&word[length],word2,nbytes);
+			word[length+nbytes] = 0;
+			found =  LookupDict2(tr, word, word2, ph_out, flags, end_flags, wtab);
+			if(found)
+			{
+				// set the skip words flag
+				flags[0] |= FLAG_SKIPWORDS;
+				dictionary_skipwords = length;
+				return(1);
+			}
 		}
 	}
 
-	for(length=0; length<N_WORD_BYTES; length++)
+	word1 = *wordptr;
+	for(length=0; length<(N_WORD_BYTES-1); length++)
 	{
 		if(((c = *word1++)==0) || (c == ' '))
 			break;
 		word[length] = c;
+	}
+	if((length == (N_WORD_BYTES-1)) && (*word1 != 0) && (*word1 != ' '))
+	{
+		// TranslateClause normally splits overlong input before lookup.
+		// Direct callers still need a hard boundary around this buffer.
+		ph_out[0] = 0;
+		flags[0] = flags[1] = 0;
+		return(0);
 	}
 	word[length] = 0;
 
@@ -3276,14 +3302,14 @@ int LookupDictList(Translator *tr, char **wordptr, char *ph_out, unsigned int *f
 	
 		// try modifications to find a recognised word
 	
-		if((end_flags & FLAG_SUFX_E_ADDED) && (word[length-1] == 'e'))
+		if((length > 0) && (end_flags & FLAG_SUFX_E_ADDED) && (word[length-1] == 'e'))
 		{
 			// try removing an 'e' which has been added by RemoveEnding
 			word[length-1] = 0;
 			found = LookupDict2(tr, word, word1, ph_out, flags, end_flags, wtab);
 		}
 		else
-		if((end_flags & SUFX_D) && (word[length-1] == word[length-2]))
+		if((length > 1) && (end_flags & SUFX_D) && (word[length-1] == word[length-2]))
 		{
 			// try removing a double letter
 			word[length-1] = 0;

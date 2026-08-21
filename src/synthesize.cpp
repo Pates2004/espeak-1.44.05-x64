@@ -1220,7 +1220,11 @@ void DoVoiceChange(voice_t *v)
 // allocate memory for a copy of the voice data, and free it in wavegenfill()
 	voice_t *v2;
 
+	if(v == NULL)
+		return;
 	v2 = (voice_t *)malloc(sizeof(voice_t));
+	if(v2 == NULL)
+		return;
 	memcpy(v2,v,sizeof(voice_t));
 	wcmdq[wcmdq_tail][0] = WCMD_VOICE;
 	wcmdq[wcmdq_tail][1] = (intptr_t)(v2);
@@ -1930,4 +1934,3 @@ int SpeakNextClause(FILE *f_in, const void *text_in, int control)
 
 	return(1);
 }  //  end of SpeakNextClause
-
