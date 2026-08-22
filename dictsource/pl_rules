@@ -690,7 +690,8 @@
 .group	 z
 		z		z
 
-	// Polish z- + in... families: keep hard z + separate i
+	// Polish z- + i... families: keep hard z + separate i
+	_)	zi	(dent	z_i	// zidentyfikować, zidentyfikowany, zidentyfikowano...
 	_)	zi	(gnor	z_i
 	_)	zi	(ndeks	z_i
 	_)	zi	(ndoktryn	z_i
