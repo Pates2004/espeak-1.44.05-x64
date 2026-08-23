@@ -97,6 +97,7 @@ _?A  litERa
 _??  symbOl
 _#9  tab
 _#32 spatsja
+_ 	sp'atsja||n^;,EROzdz;El'ajStsa	// U+00A0 no-break space
 
 // accent names
 _lig	ligat'uRa
@@ -174,6 +175,40 @@ _{	l'Evy||n,av;as||klamR'Ovy
 _}	pR'avy||n,av;as||klamR'Ovy
 _'	ap'OstROf
 _|	p;On'Ova||kR'Eska
+
+// Unicode punctuation previously borrowed from the English dictionary
+_¦	pS,ERyv'ana||p;On'Ova||kR'Eska
+_ª	symbOl||Z'En^ski
+_·	kR'Opka||ROtk'Ova
+_º	symbOl||m'E~ski
+_‐	wStSn^'ik
+_‑	wStSn^'ik||n^;,EROzdz;El'ajStsy
+_‒	p'awza||tsyfR'Ova
+_–	pup'awza
+_—	p'awza
+_―	kR'Eska||pOZ;'Oma
+_‖	pOdv'ujna||p;On'Ova||kR'Eska
+_‘	l'Evy||tsudz'yswuf||p,OjEd'yntSy
+_’	pR'avy||tsudz'yswuf||p,OjEd'yntSy
+_‚	d'Olny||tsudz'yswuf||p,OjEd'yntSy
+_‛	,OdvRuts'Ony||tsudz'yswuf||p,OjEd'yntSy
+_“	l'Evy||tsudz'yswuf||pOdv'ujny
+_”	pR'avy||tsudz'yswuf||pOdv'ujny
+_„	d'Olny||tsudz'yswuf||pOdv'ujny
+_‟	,OdvRuts'Ony||tsudz'yswuf||pOdv'ujny
+_†	kS'yZyk
+_‡	pOdv'ujny||kS'yZyk
+_•	p'uNktOR
+_‣	tR'ujkStny||p'uNktOR
+_․	kR'Opka
+_‥	dv;'E||kR'Opki
+_…	v;,ElOkR'OpEk
+_‰	pR'Omil
+_′	pR'im
+_″	pOdv'ujny||pR'im
+_‴	pOtR'ujny||pR'im
+_‼	pOdv'ujny||vykS'ykn^ik
+_₠	zn,ag||val'uty||'EwRO
 
 .	kR'Opka	$max3
 ~	t'ylda

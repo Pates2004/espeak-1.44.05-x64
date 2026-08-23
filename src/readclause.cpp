@@ -641,7 +641,8 @@ static const char *LookupCharName(Translator *tr, int c, int only)
 		}
 	}
 
-	if((only==0) && (phonemes[0] == 0) && (tr->translator_name != L('e','n')))
+	if((only==0) && (phonemes[0] == 0) && (tr->translator_name != L('e','n')) &&
+		!tr->langopts.suppress_english_fallback)
 	{
 		// not found, try English
 		SetTranslator2("en");
@@ -681,7 +682,27 @@ static const char *LookupCharName(Translator *tr, int c, int only)
 	else
 	if(only == 0)
 	{
-		strcpy(buf,"[\002(X1)(X1)(X1)]]");
+		if(tr->langopts.suppress_english_fallback)
+		{
+			char hexbuf[16];
+			size_t used;
+
+			snprintf(hexbuf,sizeof(hexbuf),"%x",static_cast<unsigned int>(c));
+			strcpy(buf," symbol u plus");
+			used = strlen(buf);
+			for(ix=0; (hexbuf[ix] != 0) && (used+2 < sizeof(buf)); ix++)
+			{
+				buf[used++] = ' ';
+				buf[used++] = hexbuf[ix];
+			}
+			if(used+1 < sizeof(buf))
+				buf[used++] = ' ';
+			buf[used] = 0;
+		}
+		else
+		{
+			strcpy(buf,"[\002(X1)(X1)(X1)]]");
+		}
 	}
 
 	return(buf);

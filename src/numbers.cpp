@@ -534,9 +534,10 @@ void LookupLetter(Translator *tr, unsigned int letter, int next_byte, char *ph_b
 		if(Lookup(tr, &single_letter[1], ph_buf3) != 0)
 			return;   // the character is specified as _* so ignore it when speaking normal text
 
-		// check whether this character is specified for English
-		if(tr->translator_name == L('e','n'))
-			return;   // we are already using English
+		// Check whether this character is specified for English.  Some voices,
+		// including Polish, deliberately keep unknown text in their own language.
+		if((tr->translator_name == L('e','n')) || tr->langopts.suppress_english_fallback)
+			return;
 
 		SetTranslator2("en");
 		if(Lookup(translator2, &single_letter[2], ph_buf3) != 0)
@@ -640,7 +641,8 @@ int TranslateLetter(Translator *tr, char *word, char *phonemes, int control)
 		return(0);
 	}
 
-	if((ph_buf[0] == 0) && (tr->translator_name != L('e','n')))
+	if((ph_buf[0] == 0) && (tr->translator_name != L('e','n')) &&
+		!tr->langopts.suppress_english_fallback)
 	{
 		// speak as English, check whether there is a translation for this character
 		SetTranslator2("en");

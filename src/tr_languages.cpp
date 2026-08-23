@@ -947,6 +947,7 @@ SetLengthMods(tr,3);  // all equal
 			tr->langopts.numbers2 = 0x40;
 			tr->langopts.max_digits = 31;
 			tr->langopts.param[LOPT_COMBINE_WORDS] = 4 + 0x100;  // combine 'nie' (marked with $alt2) with some 1-syllable (and 2-syllable) words (marked with $alt)
+			tr->langopts.suppress_english_fallback = 1;
 			SetLetterVowel(tr,'y');
 		}
 		break;

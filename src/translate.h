@@ -458,6 +458,7 @@ typedef struct {
 	char tone_numbers;
 	char ideographs;      // treat as separate words
 	char textmode;          // the meaning of FLAG_TEXTMODE is reversed (to save data when *_list file is compiled)
+	char suppress_english_fallback; // don't use English for unknown letters and symbols
 	int testing;            // testing options: bit 1= specify stressed syllable in the form:  "outdoor/2"
 	int listx;    // compile *_listx after *list
 	const unsigned int *replace_chars;      // characters to be substitutes
