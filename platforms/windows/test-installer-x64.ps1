@@ -26,8 +26,10 @@ try {
 
     $installedExe = Join-Path $installDir 'command_line\espeak.exe'
     $installedSapi = Join-Path $installDir 'espeak_sapi.dll'
+    $installedVario = Join-Path $installDir 'Vario.exe'
     $installedDictionary = Join-Path $installDir 'espeak-data\pl_dict'
-    foreach ($path in $installedExe,$installedSapi,$installedDictionary,$uninstaller) {
+    $varioShortcut = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\eSpeak\Vario - eSpeak voice manager (64-bit).lnk'
+    foreach ($path in $installedExe,$installedSapi,$installedVario,$installedDictionary,$varioShortcut,$uninstaller) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
             throw "The installer did not create the required file: $path"
         }
@@ -60,4 +62,4 @@ if (Test-Path -LiteralPath $installDir) {
     throw "The uninstaller left the application directory behind: $installDir"
 }
 
-Write-Host 'Installer test OK: files, Polish synthesis, SAPI registration and uninstall.'
+Write-Host 'Installer test OK: files, Vario shortcut, Polish synthesis, SAPI registration and uninstall.'
