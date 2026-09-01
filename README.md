@@ -11,8 +11,13 @@ The Windows runtime contains:
 - `espeak_lib.dll`, the public eSpeak C API;
 - `espeak_sapi.dll`, a native 64-bit SAPI 5 engine;
 - `TTSApp.exe`, a small SAPI voice test application;
+- `Vario.exe`, an accessible SAPI language and voice-variant manager;
 - the voices, compiled language dictionaries, dictionary sources and
   documentation from eSpeak 1.44.05.
+
+The voice-variant collection is synchronized with the 104 variants shipped by
+eSpeak NG 1.52.0. The `fast` variant keeps its equivalent classic-eSpeak syntax
+so the complete collection loads without parser errors on this engine.
 
 The ready-to-use Windows installer is available from the
 [GitHub Releases page](https://github.com/Pates2004/espeak-1.44.05-x64/releases/latest).
