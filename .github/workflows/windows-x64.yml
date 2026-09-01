@@ -68,7 +68,7 @@ jobs:
 
       - name: Test installer end to end
         shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\test-installer-x64.ps1 -Installer .\build\installer\setup_espeak-1.44.05-x64-r22.exe
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\test-installer-x64.ps1 -Installer .\build\installer\setup_espeak-1.44.05-x64-r23.exe
 
       - name: Test with AddressSanitizer
         shell: pwsh
@@ -81,7 +81,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: setup_espeak-1.44.05-x64-r22
-          path: build/installer/setup_espeak-1.44.05-x64-r22.exe
+          name: setup_espeak-1.44.05-x64-r23
+          path: build/installer/setup_espeak-1.44.05-x64-r23.exe
           if-no-files-found: error
           compression-level: 0
