@@ -2,6 +2,8 @@
 /build/
 /trash/
 /workbench/
+/platforms/windows/Vario/bin/
+/platforms/windows/Vario/obj/
 
 # Visual Studio and MSBuild intermediates
 .vs/
