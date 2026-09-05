@@ -68,7 +68,12 @@ jobs:
 
       - name: Test installer end to end
         shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\test-installer-x64.ps1 -Installer .\build\installer\setup_espeak-1.44.05-x64-r27.exe
+        run: |
+          $installers = @(Get-ChildItem .\build\installer\setup_espeak-1.44.05-x64-r*.exe)
+          if ($installers.Count -ne 1) {
+            throw "Expected one x64 installer, found $($installers.Count)."
+          }
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\test-installer-x64.ps1 -Installer $installers[0].FullName
 
       - name: Test with AddressSanitizer
         shell: pwsh
@@ -81,7 +86,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: setup_espeak-1.44.05-x64-r27
-          path: build/installer/setup_espeak-1.44.05-x64-r27.exe
+          name: setup_espeak-1.44.05-x64
+          path: build/installer/setup_espeak-1.44.05-x64-r*.exe
           if-no-files-found: error
           compression-level: 0
