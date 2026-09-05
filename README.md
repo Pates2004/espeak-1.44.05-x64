@@ -22,6 +22,10 @@ so the complete collection loads without parser errors on this engine.
 The ready-to-use Windows installer is available from the
 [GitHub Releases page](https://github.com/Pates2004/espeak-1.44.05-x64/releases/latest).
 
+Release r27 restores native Up/Down navigation in Vario and exposes every
+language node as one standard checkable tree item, including its selection and
+expanded/collapsed state, for NVDA and other UI Automation clients.
+
 All installed eSpeak executables and libraries are AMD64 binaries. The old
 32-bit PortAudio library has been replaced with a native WinMM compatibility
 layer, the SAPI server no longer requires the legacy ATL project, and the
