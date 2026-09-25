@@ -26,6 +26,11 @@ Release r27 restores native Up/Down navigation in Vario and exposes every
 language node as one standard checkable tree item, including its selection and
 expanded/collapsed state, for NVDA and other UI Automation clients.
 
+Release r28 corrects the Polish `ci` pronunciation in inflected words such as
+*druciana*, *bociana*, *starcia* and *tarcia*. It removes overly broad rules
+that turned `ci` into `si`, and includes a focused regression check. The x86
+edition uses the same compiled Polish dictionary.
+
 All installed eSpeak executables and libraries are AMD64 binaries. The old
 32-bit PortAudio library has been replaced with a native WinMM compatibility
 layer, the SAPI server no longer requires the legacy ATL project, and the

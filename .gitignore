@@ -1,5 +1,6 @@
 # Generated build and package outputs
 /build/
+/installfiles/
 /trash/
 /workbench/
 /platforms/windows/Vario/bin/
