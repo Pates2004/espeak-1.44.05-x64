@@ -31,6 +31,11 @@ Release r28 corrects the Polish `ci` pronunciation in inflected words such as
 that turned `ci` into `si`, and includes a focused regression check. The x86
 edition uses the same compiled Polish dictionary.
 
+Release r29 lets Vario select between its original upper-range Sonic boost
+and NVDA-style threefold speed across the entire SAPI rate scale. The NVDA
+mode is selected by default; the separate boost checkbox stays off until
+enabled. The 32-bit and 64-bit editions offer the same modes.
+
 All installed eSpeak executables and libraries are AMD64 binaries. The old
 32-bit PortAudio library has been replaced with a native WinMM compatibility
 layer, the SAPI server no longer requires the legacy ATL project, and the
