@@ -41,7 +41,7 @@ All installed eSpeak executables and libraries are AMD64 binaries. The old
 layer, the SAPI server no longer requires the legacy ATL project, and the
 programs use the static MSVC runtime.
 
-## Local r30 update
+## Local r33 update
 
 User instructions in English and Polish are in
 [`platforms/windows/Readme.txt`](platforms/windows/Readme.txt) and
@@ -59,12 +59,24 @@ The new smooth speed mode spans 80-1350 WPM. It uses the native engine up to
 compression. Legacy upper-range and NVDA-style modes remain available. Fresh
 settings default to smooth; previously saved speed settings are preserved.
 
-Polish pronunciation retains the consonant in the `pierwsz-` family and uses
-fuller articulation in `sześćset`, `pięćdziesiąt`, `sześćdziesiąt`,
-`dziewięćdziesiąt` and their derived forms. Numeric and written forms agree;
-normal Polish voicing assimilation remains enabled. These full number clusters
-are an intentional pronunciation preference, not a claim that usual reductions
-are incorrect Polish.
+The r33 dictionary update corrects `kwadratowy` in Polish square-bracket names
+and improves word separation in existing multiword character and symbol names,
+including `u zamknięte`. This is a dictionary-only change: ordinary text spacing,
+the synthesis engine, Sonic and Vario behavior are not changed.
+
+The earlier r32 dictionary update restored the user-selected pronunciations from
+the supplied `BOY` reference for numeric 30, 40 and 200, including those components
+in larger numbers. Their written-word equivalents keep the existing Polish
+affricate: digits and words intentionally differ. Numeric 300 and `trzysta`
+are unchanged. No primary stress markers are moved.
+
+Standard reductions in `pięćdziesiąt`, `sześćdziesiąt`, `dziewięćdziesiąt` and
+their derived forms remain unchanged, as in `BOY`. The careful `pierwsz-`
+pronunciation retains its `f`, while the fuller `sześćset`/600 articulation with
+`ć` remains an explicit user preference, not a claim of standard pronunciation.
+The existing `Tarzan` and `kolaż` pronunciation is preserved. This release does
+not change engine, Sonic or Vario functionality; the existing features above
+remain available.
 
 Vario requires the matching **.NET Desktop Runtime 10** (x64 or x86). It is
 framework-dependent and does not include a private runtime. Final local
