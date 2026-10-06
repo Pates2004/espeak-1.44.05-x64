@@ -30,6 +30,11 @@ jobs:
             throw "ISCC.exe was not installed at $iscc"
           }
 
+      - name: Install .NET 10 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
       - name: Build, test and package
         shell: pwsh
         run: |
@@ -69,7 +74,7 @@ jobs:
       - name: Test installer end to end
         shell: pwsh
         run: |
-          $installers = @(Get-ChildItem .\build\installer\setup_espeak-1.44.05-x64-r*.exe)
+          $installers = @(Get-ChildItem .\installfiles\setup_espeak-1.44.05-x64-r*.exe)
           if ($installers.Count -ne 1) {
             throw "Expected one x64 installer, found $($installers.Count)."
           }
@@ -87,6 +92,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: setup_espeak-1.44.05-x64
-          path: build/installer/setup_espeak-1.44.05-x64-r*.exe
+          path: installfiles/setup_espeak-1.44.05-x64-r*.exe
           if-no-files-found: error
           compression-level: 0

@@ -2,9 +2,14 @@
 /build/
 /installfiles/
 /trash/
+/Workspace/
+/snapshots/
+/Forme/
 /workbench/
 /platforms/windows/Vario/bin/
 /platforms/windows/Vario/obj/
+/platforms/windows/Vario.Tests/bin/
+/platforms/windows/Vario.Tests/obj/
 
 # Visual Studio and MSBuild intermediates
 .vs/

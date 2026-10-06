@@ -41,11 +41,41 @@ All installed eSpeak executables and libraries are AMD64 binaries. The old
 layer, the SAPI server no longer requires the legacy ATL project, and the
 programs use the static MSVC runtime.
 
+## Local r30 update
+
+User instructions in English and Polish are in
+[`platforms/windows/Readme.txt`](platforms/windows/Readme.txt) and
+[`Vario/README.md`](platforms/windows/Vario/README.md).
+
+Vario now has an Alt-accessible Settings menu with light/dark themes, an
+interface language override (system, English, Polish) and optional usage hints.
+System language selects Polish only when the primary Windows UI language is
+Polish. Preferences are stored in `vario.ini` beside `Vario.exe`; existing Sonic
+settings are migrated from the architecture-specific registry without deleting
+that recovery source. SAPI voice registration remains normal Windows integration.
+
+The new smooth speed mode spans 80-1350 WPM. It uses the native engine up to
+300 WPM and then holds that articulation while Sonic applies the remaining
+compression. Legacy upper-range and NVDA-style modes remain available. Fresh
+settings default to smooth; previously saved speed settings are preserved.
+
+Polish pronunciation retains the consonant in the `pierwsz-` family and uses
+fuller articulation in `sześćset`, `pięćdziesiąt`, `sześćdziesiąt`,
+`dziewięćdziesiąt` and their derived forms. Numeric and written forms agree;
+normal Polish voicing assimilation remains enabled. These full number clusters
+are an intentional pronunciation preference, not a claim that usual reductions
+are incorrect Polish.
+
+Vario requires the matching **.NET Desktop Runtime 10** (x64 or x86). It is
+framework-dependent and does not include a private runtime. Final local
+installers are in `installfiles`; previous builds are kept in `snapshots`.
+
 ## Building
 
 Requirements:
 
 - Visual Studio Build Tools 2022 with the MSVC x64 toolchain and Windows SDK;
+- .NET 10 SDK for Vario;
 - Inno Setup 6 when building the installer.
 
 Run from the repository root:
@@ -55,8 +85,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File platforms\windows\build-x64.
 ```
 
 The script builds all x64 components, performs WAV and COM/SAPI smoke tests,
-stages the complete package and creates the installer under `build\installer`.
+stages the complete package and creates the installer under `installfiles`.
 Use `-SkipInstaller` when only the binaries are required.
+
+Vario is a framework-dependent single-file application and requires .NET
+Desktop Runtime 10 x64 on the user's computer. The installer does not bundle
+the runtime. If it is missing, launching Vario opens the standard Windows
+.NET app-host download prompt. The native eSpeak engine works without .NET.
 
 The same build and tests run on GitHub Actions for every push and pull request.
 Successful runs publish the Windows installer as a downloadable workflow
