@@ -1,5 +1,19 @@
 # eSpeak 1.44.05 for Windows x64
 
+## Release r34 / Wydanie r34
+
+This maintenance release safely releases shared SAPI/core resources when COM
+allows the module to unload, while preserving active voices and supporting later
+reinitialization. Voice enumeration and candidate lists grow dynamically, fixing
+the old 150-entry overflow without dropping installed languages or variants.
+The public C API also supports clean repeated Initialize/Terminate cycles.
+Pronunciation data, Vario's interface and speed settings are unchanged.
+
+Wydanie poprawia zwalnianie wspólnych zasobów SAPI i rdzenia po zakończeniu ich
+używania oraz ponowną inicjalizację silnika. Dynamiczny katalog głosów usuwa błąd
+przepełnienia dawnej tablicy 150 elementów, bez obcinania języków i wariantów.
+Słowniki, interfejs Vario i ustawienia szybkości pozostają bez zmian.
+
 [![Windows x64 build](https://github.com/Pates2004/espeak-1.44.05-x64/actions/workflows/windows-x64.yml/badge.svg)](https://github.com/Pates2004/espeak-1.44.05-x64/actions/workflows/windows-x64.yml)
 
 This repository is a native 64-bit Windows port of the classic eSpeak 1.44.05
