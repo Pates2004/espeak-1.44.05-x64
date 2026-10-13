@@ -40,6 +40,14 @@ jobs:
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File .\platforms\windows\build-x64.ps1
 
+      - name: Resolve centralized installers
+        id: central-materials
+        shell: pwsh
+        run: |
+          . ./project_materials.ps1
+          $installers = Join-ProjectMaterialPath $env:GITHUB_WORKSPACE 'installfiles'
+          "installers=$installers" >> $env:GITHUB_OUTPUT
+
       - name: Verify committed Polish dictionary
         shell: pwsh
         run: git diff --exit-code -- espeak-data/pl_dict
@@ -47,6 +55,7 @@ jobs:
       - name: Verify AMD64 binaries
         shell: pwsh
         run: |
+          . ./project_materials.ps1
           $files = @(
             "build\x64\Release\espeak.exe",
             "build\x64\Release\espeak_lib.dll",
@@ -55,7 +64,7 @@ jobs:
             "build\package\Vario.exe"
           )
           foreach ($file in $files) {
-            $stream = [IO.File]::OpenRead((Resolve-Path $file))
+            $stream = [IO.File]::OpenRead((Join-ProjectMaterialPath $env:GITHUB_WORKSPACE $file))
             try {
               $reader = [IO.BinaryReader]::new($stream)
               $stream.Position = 0x3c
@@ -74,7 +83,7 @@ jobs:
       - name: Test installer end to end
         shell: pwsh
         run: |
-          $installers = @(Get-ChildItem .\installfiles\setup_espeak-1.44.05-x64-r*.exe)
+          $installers = @(Get-ChildItem "${{ steps.central-materials.outputs.installers }}\setup_espeak-1.44.05-x64-r*.exe")
           if ($installers.Count -ne 1) {
             throw "Expected one x64 installer, found $($installers.Count)."
           }
@@ -92,6 +101,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: setup_espeak-1.44.05-x64
-          path: installfiles/setup_espeak-1.44.05-x64-r*.exe
+          path: ${{ steps.central-materials.outputs.installers }}/setup_espeak-1.44.05-x64-r*.exe
           if-no-files-found: error
           compression-level: 0

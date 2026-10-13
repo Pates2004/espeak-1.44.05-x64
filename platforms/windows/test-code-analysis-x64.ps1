@@ -2,9 +2,10 @@
 param()
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '..\..\project_materials.ps1')
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $project = Join-Path $projectRoot 'platforms\windows\x64\espeak.vcxproj'
-$analysisFile = Join-Path $projectRoot 'build\x64\obj\espeak\Release\vc.nativecodeanalysis.all.xml'
+$analysisFile = Join-ProjectMaterialPath $projectRoot 'build\x64\obj\espeak\Release\vc.nativecodeanalysis.all.xml'
 
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath

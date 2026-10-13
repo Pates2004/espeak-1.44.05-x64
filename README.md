@@ -1,4 +1,26 @@
+> Local build and assistant materials were moved to `D:\work\espeak-1.44.05-source\espeak-1.44.05-source`. Paths beginning with `installfiles`, `Workspace`, `snapshots`, `trash` or `Forme` below refer to that central directory; source paths remain relative to this checkout. Use `C:\work` only if drive D: does not exist.
+
 # eSpeak 1.44.05 for Windows x64
+
+## Release r35 / Wydanie r35
+
+The Polish dictionary no longer forces hard `s` in every word beginning with
+`sing-`. English-spelled `sing`, `singing` and `singer` now use the requested
+soft Polish onset. Polish `singiel` and the `singl-` family retain hard `s`.
+Other established Polish hard-onset exceptions remain explicit and bounded.
+The `nieziszcz-` family now retains the voiced soft `ź` of `ziszcz-` after `nie-`.
+Build output and installer inputs now consistently use the central material
+directory; native synthesis, Vario controls and speed modes are unchanged.
+
+Polski słownik nie wymusza już twardego `s` we wszystkich słowach na `sing-`.
+`Sing`, `singing` i `singer` mają miękki początek zgodnie z życzeniem użytkownika.
+`Singiel` i rodzina `singl-` zachowują twarde `s`. Pozostałe polskie wyjątki mają
+osobne, ograniczone reguły. Wyniki kompilacji i dane instalatora korzystają
+z centralnego katalogu materiałów; działanie Vario i tryby szybkości są zachowane.
+Rodzina `nieziszcz-` zachowuje dźwięczne, miękkie `ź` także po przedrostku `nie-`.
+
+`build/...` in build instructions resolves to `Workspace/build/...` under the
+central material directory. Sources and project configuration stay in this checkout.
 
 ## Release r34 / Wydanie r34
 
