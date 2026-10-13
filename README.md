@@ -2,7 +2,29 @@
 
 # eSpeak 1.44.05 for Windows x64
 
-## Release r35 / Wydanie r35
+## Release r36 / Wydanie r36
+
+This dictionary correction uses separate hard `z` and `i` in `ziścić`, `ziszcz-`
+and their inflections, including forms beginning with `nie-`. WSJP records
+`ziścić` as [z-iścić] and `ziszczać się` as [z-iszczać się]. The soft-`ź`
+exception introduced for `nieziszcz-` in r35 was incorrect and has been removed.
+The sing-family correction, earlier approved pronunciations, Vario and synthesis
+settings remain in place.
+
+Wydanie słownikowe przywraca osobne, twarde `z` i samogłoskę `i` w rodzinie
+`ziścić`/`ziszcz-`, również w odmianach i formach z `nie-`. WSJP podaje
+[z-iścić] oraz [z-iszczać się]. Miękki wyjątek dla `nieziszcz-` dodany w r35
+był błędny i został usunięty. Poprawka rodziny `sing-`, wcześniejsze uzgodnione
+wymowy, Vario i ustawienia syntezy pozostają zachowane.
+
+Sources / Źródła: [WSJP: ziścić](https://wsjp.pl/haslo/podglad/65243/ziscic),
+[WSJP: ziszczać się](https://wsjp.pl/haslo/podglad/43703/ziszczac-sie).
+
+## Release r35 / Wydanie r35 — historical / historyczne
+
+The soft-`ź` claim for `nieziszcz-` below was an incorrect linguistic conclusion,
+superseded by r36. Poniższy opis miękkiego `ź` w `nieziszcz-` był błędną oceną
+wymowy i został zastąpiony poprawką r36. It is retained here as release history.
 
 The Polish dictionary no longer forces hard `s` in every word beginning with
 `sing-`. English-spelled `sing`, `singing` and `singer` now use the requested
