@@ -1,6 +1,21 @@
-> Local build and assistant materials were moved to `D:\work\espeak-1.44.05-source\espeak-1.44.05-source`. Paths beginning with `installfiles`, `Workspace`, `snapshots`, `trash` or `Forme` below refer to that central directory; source paths remain relative to this checkout. Use `C:\work` only if drive D: does not exist.
+> Current installers are in this checkout's `installfiles`. Build and useful diagnostic files are in `D:\work\Workspace\espeak-1.44.05-source`; audits in `D:\work\Forme\espeak-1.44.05-source`, previous builds in `D:\work\Snapshots\espeak-1.44.05-source`, and disposable files in `D:\work\Trash\espeak-1.44.05-source`. Scripts resolve these category paths automatically. Use `C:\work` only if drive D: does not exist.
 
 # eSpeak 1.44.05 for Windows x64
+
+## Release r37 / Wydanie r37
+
+Vario announces real checkbox state changes for both the speed checkbox and
+three-state voice trees. Native tree navigation, localized root labels and optional
+hints are retained. Sonic is now off for fresh settings; existing saved choices
+and legacy settings are preserved. The selected speed mode remains available.
+In Polish punctuation, ASCII `-` is named "minus". Bracket names are unchanged.
+
+Vario udostępnia czytnikom ekranu rzeczywiste zmiany zaznaczenia pola szybkości
+oraz trójstanowych drzew głosów. Zachowano zwykłą nawigację drzewa, tłumaczone
+etykiety i opcjonalne podpowiedzi. Sonic jest domyślnie wyłączony przy nowych
+ustawieniach; zapisane wybory i starsze ustawienia pozostają zachowane. Wybrany
+tryb szybkości pozostaje dostępny. Znak ASCII `-` ma nazwę „minus”; nawiasów
+nie zmieniono.
 
 ## Release r36 / Wydanie r36
 
