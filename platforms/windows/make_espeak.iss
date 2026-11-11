@@ -11,7 +11,7 @@
 AppName=eSpeak
 AppId={{6C3C2E57-862C-49B3-91F5-7A27FE8CC0D6}
 AppVersion=1.44.05
-AppVerName=eSpeak version 1.44.05 r37 (64-bit)
+AppVerName=eSpeak version 1.44.05 r38 (64-bit)
 AppCopyright=Licensed under GNU General Public License version 3.   (See file License.txt for details).
 WizardStyle=modern
 LicenseFile=..\..\License.txt
@@ -22,14 +22,14 @@ ArchitecturesInstallIn64BitMode=x64compatible
 DefaultDirName={autopf}\eSpeak
 DefaultGroupName=eSpeak
 OutputDir={#InstallerDir}
-OutputBaseFilename=setup_espeak-1.44.05-x64-r37
+OutputBaseFilename=setup_espeak-1.44.05-x64-r38
 Compression=lzma2/ultra64
 SolidCompression=yes
 ShowLanguageDialog=auto
 UninstallDisplayIcon={app}\TTSApp.exe
-VersionInfoVersion=1.44.5.37
+VersionInfoVersion=1.44.5.38
 VersionInfoProductName=eSpeak
-VersionInfoDescription=eSpeak 1.44.05 r37 native 64-bit installer
+VersionInfoDescription=eSpeak 1.44.05 r38 native 64-bit installer
 
 [InstallDelete]
 Type: files; Name: "{app}\espeak.dll"
@@ -88,6 +88,7 @@ VarioPageTitle=Optional companion application
 VarioPageDescription=Choose whether to install Vario before accepting the license.
 VarioPageSubcaption=Vario is an accessible manager for installed SAPI voices, variants, per-voice modulation and Sonic speed boost.
 InstallVario=Install Vario (recommended)
+GenderReadFailed=The voice definition could not be read: %1
 
 pl.v1=Wybierz głosy, które mają zostać zainstalowane
 pl.v2=lub naciśnij Enter, aby przyjąć wartości domyślne
@@ -96,6 +97,7 @@ pl.VarioPageTitle=Opcjonalna aplikacja dodatkowa
 pl.VarioPageDescription=Wybierz, czy zainstalować Vario przed zaakceptowaniem licencji.
 pl.VarioPageSubcaption=Vario to dostępny menedżer zainstalowanych głosów SAPI, wariantów, modulacji dla poszczególnych głosów i przyspieszania Sonic.
 pl.InstallVario=Zainstaluj Vario (zalecane)
+pl.GenderReadFailed=Nie można odczytać definicji głosu: %1
 
 fr.v1=Sélectionnez les voix à installer
 fr.v2=ou appuyez sur Entrée pour accepter les valeurs par défaut.
@@ -353,6 +355,8 @@ begin
 end;
 
 
+#include "voice-gender.iss"
+
 procedure SetupVoice(Voice: String; Index: Integer);
 var
   ix: Integer;
@@ -393,7 +397,8 @@ begin
   RegWriteDWordValue(HKEY_LOCAL_MACHINE_64,RegVoice2,'Inflection',50);
 
   RegWriteStringValue(HKEY_LOCAL_MACHINE_64,RegVoice2a,'Name',sEspeak+Voice);
-  RegWriteStringValue(HKEY_LOCAL_MACHINE_64,RegVoice2a,'Gender','Male');
+  RegWriteStringValue(HKEY_LOCAL_MACHINE_64,RegVoice2a,'Gender',
+    VoiceGender(ExpandConstant('{app}\espeak-data\voices'), Voice));
   RegWriteStringValue(HKEY_LOCAL_MACHINE_64,RegVoice2a,'Age','Adult');
   RegWriteStringValue(HKEY_LOCAL_MACHINE_64,RegVoice2a,'Language',Lcode);
   RegWriteStringValue(HKEY_LOCAL_MACHINE_64,RegVoice2a,'Vendor','http://espeak.sf.net');

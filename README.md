@@ -2,6 +2,36 @@
 
 # eSpeak 1.44.05 for Windows x64
 
+## Release r38 / Wydanie r38
+
+Vario blocks Apply until the installation has loaded successfully. It prepares
+the INI before changing SAPI voices and restores its previous registry entries
+when a recoverable save fails. Conflicting edits from another Vario instance
+in the same Windows session require a reload. Voice gender metadata now follows
+the installed voice/variant definitions. The Windows CLI writes binary WAV to
+`--stdout`, preserving PCM bytes in pipes. Sonic remains off for fresh settings.
+
+Vario blokuje Zastosuj do poprawnego odczytu instalacji. Przygotowuje INI przed
+zmianą głosów SAPI i przywraca poprzednie własne wpisy rejestru po obsługiwalnym
+błędzie zapisu. Konflikt z inną instancją Vario w tej samej sesji Windows wymaga
+odświeżenia. Płeć głosu pochodzi z definicji głosu/wariantu. Windowsowe `--stdout`
+zapisuje binarny WAV bez zniekształcania bajtów PCM. Sonic w nowych ustawieniach
+pozostaje wyłączony.
+
+The default Polish dictionary corrects the soft affricate in numeric 30/40/200,
+uses mo-NI-ka and careful stress in MU-zyka/MI-nimum and the reviewed noun
+group. The complete alternative [mydict](mydict/README.md) retains the previous
+number sound and regular penultimate stress, such as mu-ZY-ka/mi-NI-mum.
+20 and 300 remain unchanged. Both accepted kolaż preferences are documented
+there. Installers use the default; no separate engine is needed.
+
+Domyślny polski słownik poprawia miękką afrykatę w liczbach 30/40/200, używa
+mo-NI-ka i akcentu wzorcowego w MU-zyka/MI-nimum oraz omawianej grupie
+rzeczowników. Pełny alternatywny [mydict](mydict/README.pl.md) zachowuje starsze
+brzmienie liczb i regularny akcent przedostatni, np. mu-ZY-ka/mi-NI-mum.
+20 i 300 pozostają bez zmian. Instrukcja opisuje też dwa zaakceptowane warianty
+akcentu kolażu. Instalator używa wersji domyślnej, bez osobnego silnika.
+
 ## Release r37 / Wydanie r37
 
 Vario announces real checkbox state changes for both the speed checkbox and
