@@ -2,6 +2,24 @@
 
 # eSpeak 1.44.05 for Windows x64
 
+## Release r40 / Wydanie r40
+
+The Polish dictionary corrects stress in nouns such as `sataniście`,
+`pianiście` and `soliście`, without treating them as past-tense verbs.
+The default dictionary keeps careful verb stress; the complete alternative
+dictionary in [mydict](mydict/README.md) adds the agreed colloquial penultimate
+stress for past and conditional forms. Both include genuine pronunciation fixes.
+The two existing number styles are retained. Speech controls and Vario behavior
+are unchanged.
+
+Polski słownik poprawia akcent rzeczowników takich jak „sataniście”,
+„pianiście” i „soliście”, bez traktowania ich jak czasowników w czasie przeszłym.
+Domyślny słownik zachowuje staranny akcent czasowników; pełny słownik alternatywny
+w [mydict](mydict/README.pl.md) dodaje uzgodniony potoczny akcent przedostatni
+form przeszłych i przypuszczających. Oba zawierają poprawki rzeczywistych błędów.
+Zachowano dwa dotychczasowe warianty liczb. Sterowanie mową i działanie Vario
+pozostają bez zmian.
+
 ## Release r39 / Wydanie r39
 
 Opening or cancelling the installer leaves registered voices intact. Upgrades
